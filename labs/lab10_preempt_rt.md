@@ -1,6 +1,8 @@
 # Week 10 — PREEMPT_RT: Linux enters the loop
-> **Tech guide:** [SOP-10](sops/sop10_preempt_rt.md) · **Reading:** [READINGS.md](../READINGS.md), week 10 · **Module:** 5
-> **Starting today:** larger groups (two pairs), one SBC per group. The Hub Kit is needed this week ([BOM](../BOM.md)).
+> - **Tech guide:** [SOP-10](sops/sop10_preempt_rt.md)
+> - **Reading:** [READINGS.md](../READINGS.md), week 10
+> - **Module:** 5
+> - **Starting today:** larger groups (two pairs), one SBC per group. The Hub Kit is needed this week ([BOM](../BOM.md)).
 
 **From:** Eng. Samuel Cifuentes — *"The Hub runs Linux: GUI, routing, cloud — you
 don't do that on an MCU. But the Hub also controls the pump station, and there
