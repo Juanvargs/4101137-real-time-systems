@@ -54,6 +54,21 @@ Esto ocurre porque un período largo se compensa estadísticamente con varios
 períodos muy cortos cuando el loop intenta atender los ticks acumulados. El
 promedio no muestra el peor caso.
 
+## Anchos observados de las demás tareas
+
+También medimos cuánto permaneció alta la señal de instrumentación de cada tarea.
+No son WCET: son los máximos vistos bajo el protocolo declarado.
+
+| Tarea | Máximo observado | Qué significa |
+|---|---:|---|
+| Control | 0.7 us | Es corto; 300 ejecuciones en 3 s concuerdan con 10 ms. |
+| Consola, `status` | 6.6010 ms | El Enter ejecuta e imprime la respuesta; los bytes simples duraron desde 4 us. |
+| Telemetría | 5.7770 ms | Cada publicación de 1 Hz ocupa varios ms del único superloop. |
+| Flow batch | 44 us | El cálculo se ejecuta una vez por cada 100 pulsos de flujo. |
+
+El dato de telemetría es especialmente importante: una tarea soft relativamente
+larga puede retrasar a una tarea hard si las dos comparten un superloop.
+
 ## Pulso de flujo
 
 La AD2 generó DIO6 a 100 Hz y lo conectamos a D9. Después de 100 pulsos, el
