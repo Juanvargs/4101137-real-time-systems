@@ -58,3 +58,11 @@
 		com-invdir;
 	};
 };
+/*
+ * This physical ESP32-C6-DevKitC has a 4 MB flash module.
+ * The Zephyr board default assumes the 8 MB N8 variant.
+ */
+&flash0 {
+	reg = <0x0 0x400000>;
+	ranges = <0x0 0x0 0x400000>;
+};

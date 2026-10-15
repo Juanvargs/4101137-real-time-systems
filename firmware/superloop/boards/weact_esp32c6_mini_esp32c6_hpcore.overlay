@@ -1,0 +1,74 @@
+/*
+ * ESP32-C6 SuperMini (WeAct) pin map for SoilSense.
+ *
+ * The application logic stays unchanged. This overlay selects the USB
+ * Serial/JTAG console and assigns the logic-analyzer instrumentation pins.
+ */
+
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+	chosen {
+		zephyr,console = &usb_serial;
+		zephyr,shell-uart = &usb_serial;
+	};
+
+	aliases {
+		led0 = &valve_out;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		valve_out: valve_out {
+			gpios = <&gpio0 11 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
+	instr {
+		compatible = "gpio-leds";
+
+		instr_samp: instr_samp {
+			gpios = <&gpio0 18 GPIO_ACTIVE_HIGH>;
+		};
+
+		instr_ctrl: instr_ctrl {
+			gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>;
+		};
+
+		instr_cons: instr_cons {
+			gpios = <&gpio0 20 GPIO_ACTIVE_HIGH>;
+		};
+
+		instr_tele: instr_tele {
+			gpios = <&gpio0 21 GPIO_ACTIVE_HIGH>;
+		};
+
+		instr_flow: instr_flow {
+			gpios = <&gpio0 22 GPIO_ACTIVE_HIGH>;
+		};
+
+		instr_disp: instr_disp {
+			gpios = <&gpio0 23 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
+	keys {
+		compatible = "gpio-keys";
+
+		flow_pulse: flow_pulse {
+			gpios = <&gpio0 3
+				 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+		};
+	};
+};
+
+/* Use the USB-C serial/JTAG device as the Zephyr console. */
+&usb_serial {
+	status = "okay";
+};
+
+/* GPIO3 belongs to SPI2 in the base board file; SoilSense uses it as input. */
+&spi2 {
+	status = "disabled";
+};
