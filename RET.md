@@ -9,10 +9,10 @@
 | Course | Real-Time Systems — UNAL 4101137 |
 | Team | Individual — Juan Pablo Vargas Cordoba |
 | Authors | Juan Pablo Vargas Cordoba |
-| Status | Draft — Week 3 ESP32-C6 thread comparison recorded |
-| Version | 0.5 |
-| Date | 2026-10-15 |
-| Repository baseline | Week 3 working tree; evidence commit pending |
+| Status | Draft — Week 4 kernel A/B and stack evidence recorded |
+| Version | 0.6 |
+| Date | 2026-10-27 |
+| Repository baseline | Week 4 complete kernel migration; evidence commit pending |
 | Starter board | NUCLEO-G474RE — student-owned; course baseline differs |
 | Board/debug identifier | STLINK-V3 `003400303232510139353236` |
 | Week 3 comparison MCU | ESP32-C6 DevKitC compatible, 4 MB flash |
@@ -26,6 +26,7 @@
 | 0.3 | 2026-09-26 | Juan Pablo Vargas Cordoba | Week 2 superloop, flash-accelerator, and blocking-command evidence |
 | 0.4 | 2026-10-10 | Juan Pablo Vargas Cordoba | Added observed widths for control, console, telemetry, and flow batch |
 | 0.5 | 2026-10-15 | Juan Pablo Vargas Cordoba | Added ESP32-C6 superloop versus sampling-thread timing evidence |
+| 0.6 | 2026-10-27 | Juan Pablo Vargas Cordoba | Added complete kernel A/B, visible hand-off cost, stack high-water marks, and ADR-001 |
 
 ## Purpose and evidence rule
 
@@ -62,12 +63,12 @@ successful runs.
 
 | ID | Requirement (EARS style) | Type | Status | Planned verification |
 |---|---|---|---|---|
-| REQ-CTRL-01 | While the system is irrigating, the control loop shall be released every 10 ms and shall complete no later than its next release. | Hard | Draft | GPIO + logic analyzer; RTA |
+| REQ-CTRL-01 | While the system is irrigating, the control loop shall be released every 10 ms and shall complete no later than its next release. | Hard | Kernel mitigation observed; strict deadline not demonstrated | GPIO + logic analyzer; RTA |
 | REQ-CTRL-02 | When measured pressure exceeds the safety threshold, the system shall command the valve/pump to its safe state within 5 ms. | Hard | Draft | Instrumented input-to-output latency |
-| REQ-CTRL-03 | While control is enabled, the system shall sample the pressure input every 1 ms and shall complete each sampling job before its next release. | Hard | Mitigated by sampling thread; strict observed deadline still missed by 2 us | GPIO + logic analyzer |
+| REQ-CTRL-03 | While control is enabled, the system shall sample the pressure input every 1 ms and shall complete each sampling job before its next release. | Hard | Kernel mitigation observed; strict deadline still missed by 5.6 us under `calib` | GPIO + logic analyzer |
 | REQ-CTRL-04 | While the control node is operational, the system shall publish telemetry of its current state at least once every 1000 ms. | Soft | Observed; detailed deadline analysis pending | GPIO + logic analyzer |
 | REQ-CTRL-05 | When a valid console command is received, the system shall produce a usable response within `TBD`; a response after that limit may be discarded. | Firm | Incomplete | UART timestamps + trace |
-| REQ-CTRL-06 | While a firm console command is executing, the system shall continue to satisfy all hard sampling deadlines. | Hard | Superloop FAIL; sampling thread reduces interference to 2 us observed jitter | GPIO + logic analyzer + serial status |
+| REQ-CTRL-06 | While a firm console command is executing, the system shall continue to satisfy all hard sampling deadlines. | Hard | Superloop FAIL; kernel reduces interference to 6.2 us observed jitter, but strict hard deadline remains unproven | GPIO + logic analyzer + serial status |
 
 ### 1.3 Task set
 
@@ -77,13 +78,13 @@ under a declared protocol. A future maximum observed value will be reported as
 
 | Task | Requirement | Type | Activation/period | Deadline | Measured `C_i` | Jitter bound | Priority/policy | Measurement method |
 |---|---|---|---:|---:|---:|---:|---|---|
-| Sensor sampling | REQ-CTRL-03 | Hard | Periodic, 1 ms (1 kHz) | 1 ms | NUCLEO: `C_obs,max` 3 us baseline; 4 us cache-off; 12 us during `calib`. C6 threaded: `C_obs,max` 2.7 us. | C6 threaded: 2 us observed max; C6 superloop `calib`: 402.47 ms | Superloop -> C6 sampling thread (prio. 2) | GPIO + analyzer |
-| Control loop | REQ-CTRL-01 | Hard | Periodic, 10 ms | 10 ms | `C_obs,max` 0.7 us (300 runs, 10 MHz capture) | TBD | Single superloop | GPIO + analyzer |
+| Sensor sampling | REQ-CTRL-03 | Hard | Periodic, 1 ms (1 kHz) | 1 ms | NUCLEO: `C_obs,max` 3 us baseline; 4 us cache-off; 12 us during `calib`. C6: `C_obs,max` 2.7 us in Week 3. | C6 full kernel: 6 us idle, 6.2 us with `calib` observed max | `sampling_tid`, preemptive prio. 2 | GPIO + analyzer |
+| Control loop | REQ-CTRL-01 | Hard | Periodic, 10 ms | 10 ms | `C_obs,max` 0.7 us (300 NUCLEO runs, 10 MHz capture) | C6 full kernel period with `calib`: 10.003 ms observed max | `control_tid`, preemptive prio. 3 | GPIO + analyzer |
 | Overpressure emergency stop | REQ-CTRL-02 | Hard | Event-triggered | < 5 ms | Shared with sampling; standalone response not measured | N/A | TBD | Instrumented input-to-output latency |
-| Command console | REQ-CTRL-05, REQ-CTRL-06 | Firm | Event-triggered/sporadic | TBD | `status` path: 4 us to 6.6010 ms across 8 received bytes; `calib` blocks the loop for approximately 414 ms; neither is a WCET | N/A | Single superloop | UART + DIO2 trace |
-| Telemetry | REQ-CTRL-04 | Soft | Periodic, 1 s | 1 s (derived from task period) | `C_obs,max` 5.7770 ms (30 runs) | TBD | Single superloop | DIO3 trace |
-| Flow batch | N/A | N/A | Every 100 flow pulses | TBD | `C_obs,max` 44 us (30 batches at 100 Hz stimulus) | N/A | Single superloop | DIO4 trace |
-| Display HMI | N/A | Soft | Periodic, 500 ms when enabled | TBD | Not enabled on this run | N/A | Single superloop | DIO5 trace |
+| Command console | REQ-CTRL-05, REQ-CTRL-06 | Firm | Event-triggered/sporadic | TBD | `status` path: 4 us to 6.6010 ms across 8 received bytes; `calib` blocks the loop for approximately 414 ms; neither is a WCET | N/A | `console_tid`, preemptive prio. 9 | UART + DIO2 trace |
+| Telemetry | REQ-CTRL-04 | Soft | Periodic, 1 s | 1 s (derived from task period) | `C_obs,max` 5.7770 ms (30 runs) | TBD | `telemetry_tid`, preemptive prio. 8 | DIO3 trace |
+| Flow batch | N/A | N/A | Every 100 flow pulses | TBD | `C_obs,max` 44 us (30 batches at 100 Hz stimulus) | N/A | private `flow_wq`, preemptive prio. 5 | DIO4 trace |
+| Display HMI | N/A | Soft | Periodic, 500 ms when enabled | TBD | Not enabled on this run | N/A | `display_tid`, preemptive prio. 7 | DIO5 trace |
 
 No unmeasured execution time, telemetry period, console deadline, sensor deadline,
 or jitter bound has been invented; each unresolved value remains explicit until the
@@ -93,12 +94,12 @@ course provides it or the team measures and justifies it.
 
 | Requirement | Implementing task | Analysis | Evidence | Verdict |
 |---|---|---|---|---|
-| REQ-CTRL-01 | Control loop | Utilization + RTA | EV-W02-TASKS-006 records observed width; end-to-end control verification is pending | INCONCLUSIVE |
+| REQ-CTRL-01 | Control loop | Utilization + RTA | EV-W02-TASKS-006 records observed width; EV-W04-AB-001 observes 10.003 ms maximum period during `calib` | FAIL strict; analytical proof pending |
 | REQ-CTRL-02 | Overpressure emergency stop | Input-to-output response bound | Pending measurement | PENDING |
-| REQ-CTRL-03 | Sensor sampling | Period/jitter analysis | EV-W02-BASELINE-002, EV-W02-CACHE-004, EV-W02-BLOCK-005, EV-W03-BASELINE-002, EV-W03-THREAD-004 | FAIL strict; strong mitigation observed |
+| REQ-CTRL-03 | Sensor sampling | Period/jitter analysis | EV-W02-BASELINE-002, EV-W02-CACHE-004, EV-W02-BLOCK-005, EV-W03-BASELINE-002, EV-W03-THREAD-004, EV-W04-AB-001 | FAIL strict; strong kernel mitigation observed |
 | REQ-CTRL-04 | Telemetry | Period characterization | EV-W02-TASKS-006 observed 30 publications in 30 s; period statistic pending | INCONCLUSIVE |
 | REQ-CTRL-05 | Command console | Response-time characterization | EV-W02-TASKS-006 (`status`) and EV-W02-BLOCK-005; deadline is TBD | INCONCLUSIVE |
-| REQ-CTRL-06 | Console versus hard sampling | Non-interference trace | EV-W02-BLOCK-005, EV-W03-CALIB-003, EV-W03-THREAD-004 | FAIL strict; sampling interference strongly reduced |
+| REQ-CTRL-06 | Console versus hard sampling | Non-interference trace | EV-W02-BLOCK-005, EV-W03-CALIB-003, EV-W03-THREAD-004, EV-W04-AB-001 | FAIL strict; sampling interference strongly reduced |
 
 ## 2. Architecture Decision Records
 
@@ -107,16 +108,33 @@ exist.
 
 ### ADR-001 — Control-node execution architecture
 
-- **Status:** Not started; decision due in week 4.
-- **Context:** Compare the superloop and multithreaded Zephyr implementation on the
-  same physical ESP32-C6 DevKitC-compatible board, with the same task set and load.
-- **Alternatives:** superloop; multithreaded kernel; hybrid architecture.
-- **Decision:** TBD.
-- **Quantitative justification:** Week 2 measured a 6.845 ms maximum sampling
-  period against a 1 ms deadline in normal operation and 414.06 ms during the
-  blocking console command. On the C6, `calib` yielded 403.47 ms in the
-  superloop and 1.0020 ms after moving sampling to a priority-2 thread.
-- **Consequences and costs:** TBD.
+- **Status:** Accepted experimentally in Week 4; formal schedulability proof
+  remains pending.
+- **Context:** The same ESP32-C6 DevKitC-compatible board ran the same
+  SoilSense task set before and after the migration. In the Week-3 superloop,
+  the synchronous console command `calib` delayed sampling to 403.47 ms and
+  control to 412.47 ms. That violates the nominal 1 ms and 10 ms deadlines by
+  orders of magnitude.
+- **Alternatives:** retain the superloop; use the full multithreaded Zephyr
+  design; use a hybrid design that moves only selected tasks.
+- **Decision:** Use the full multithreaded Zephyr design: `k_msgq` for sampled
+  release timestamps, `k_sem` from sampling to control, a private priority-5
+  flow workqueue, and sleeping display/telemetry/console threads. `main`
+  performs bring-up and returns.
+- **Quantitative justification:** EV-W04-AB-001 measured maximum sampling
+  jitter with `calib` of 6.2 us, versus 402.47 ms in the C6 superloop. Maximum
+  control period with `calib` became 10.003 ms, versus 412.47 ms. The measured
+  ISR-to-sampling start peak was 10 us and the visible sampling-to-control
+  hand-off maximum was 11.7 us (EV-W04-COST-002), estimated as 1.17 ms/s at
+  100 control releases per second.
+- **Consequences and costs:** The design prevents the firm console workload
+  from producing hundreds of milliseconds of interference. It introduces IPC,
+  priorities, context-switch overhead and per-thread stack budgets. The stack
+  measurement found `idle` at 228/256 B (89 %, only 28 B free), so that stack
+  needs review before product deployment (EV-W04-STACK-003). The observed
+  maxima still exceed strict nominal periods by 5.6 us for sampling and 3 us
+  for control; therefore this ADR chooses the substantially safer architecture
+  but does not claim a formal hard-real-time PASS.
 
 ### ADR-002 — Mutual-exclusion policy
 
@@ -154,6 +172,9 @@ exist.
 | EV-W03-CALIB-003 | Week 3 | C6 superloop interference from `calib` | REQ-CTRL-01, 03, 06 | ESP32-C6 DevKitC compatible | Sampling max 403.47 ms; control max 412.47 ms; backlog 403 | FAIL | `evidence/week03/EV-W03-CALIB-003.md` |
 | EV-W03-THREAD-004 | Week 3 | C6 priority-thread mitigation | REQ-CTRL-01, 03, 06 | ESP32-C6 DevKitC compatible | Sampling max 1.0020 ms during `calib`; control max 412.31 ms; backlog 0; release-to-start peak 11 us | FAIL strict; mitigation demonstrated | `evidence/week03/EV-W03-THREAD-004.md` |
 | EV-W03-CI-008 | Week 3 | Measure C6 sampling execution width | REQ-CTRL-03 | ESP32-C6 DevKitC compatible | `C_obs,max` 2.7 us across 3,000 observed pulses | CHARACTERIZED | `evidence/week03/EV-W03-CI-008.md` |
+| EV-W04-AB-001 | Week 4 | Compare C6 superloop and full kernel migration | REQ-CTRL-01, 03, 06 | ESP32-C6 DevKitC compatible | `calib`: sampling jitter 402.47 ms -> 6.2 us; control max period 412.47 -> 10.003 ms | FAIL strict; strong mitigation demonstrated | `evidence/week04/EV-W04-AB-001.md` |
+| EV-W04-COST-002 | Week 4 | Measure visible sampling-to-control hand-off gap | N/A | ESP32-C6 DevKitC compatible | Max observed gap 11.7 us; 1.17 ms/s estimated at 100 hand-offs/s | CHARACTERIZED | `evidence/week04/EV-W04-COST-002.md` |
+| EV-W04-STACK-003 | Week 4 | Measure thread stack high-water marks under load | N/A | ESP32-C6 DevKitC compatible | `idle` 228/256 B (89 %); `control_tid` 236/1024 B | CHARACTERIZED; idle margin needs review | `evidence/week04/EV-W04-STACK-003.md` |
 
 ### 3.2 Week 1 — environment and reproducibility
 
@@ -316,7 +337,48 @@ not protect control, which still belongs to the blocked main loop. The separate
 C6 pulse-width capture records `C_obs,max = 2.7 us`; that observed execution
 width must not be confused with the 11 us release-to-thread-start latency.
 
-### 3.5 Future-week evidence rule
+### 3.5 Week 4 — Full kernel migration and A/B
+
+The Week-4 implementation completes the mapping from superloop work to Zephyr
+kernel objects. `sampling_tid` (priority 2) consumes `tick_q`; every tenth
+sample gives `control_sem`, waking `control_tid` (priority 3). Flow ISR work is
+deferred into the private `flow_wq` at priority 5. Display, telemetry, and
+console run as sleeping threads at priorities 7, 8, and 9 respectively. The
+lower numeric priority is higher in Zephyr's preemptive range.
+
+#### A/B result
+
+| Measurement | C6 superloop, Week 3 | C6 full kernel, Week 4 | Change |
+|---|---:|---:|---:|
+| Max sampling jitter, 30 s idle | 105 us | 6 us | 99 us less observed jitter |
+| Max sampling jitter, `calib` | 402.47 ms | 6.2 us | removes ~402 ms of observed interference |
+| Max control period, `calib` | 412.47 ms | 10.003 ms | removes ~402 ms of observed interference |
+| `lat_peak_us`, ISR -> sampling start | — | 10 us | new measured hand-off metric |
+
+The kernel values use the same board, instrumentation GPIOs and command load as
+the C6 Week-3 comparison. The idle capture used 30 M samples at 1 MHz for 30 s;
+the `calib` capture used 30 M samples at 5 MHz for 6 s. See EV-W04-AB-001 for
+the raw screenshots, min/max values and reproducible commands.
+
+The full migration is an architectural success compared with the superloop,
+but it remains an observed result: sampling's 1.0056 ms maximum under `calib`
+is 5.6 us late against a strict 1 ms deadline, and control's 10.003 ms maximum
+is 3 us late against 10 ms. Neither result is a WCET bound.
+
+#### Cost and stack result
+
+Five cursor measurements at 10 MHz gave a maximum visible DIO0-fall to
+DIO1-rise gap of 11.7 us. At 100 control releases per second this is
+`100 × 11.7 us = 1.17 ms/s`, or 0.117 % of a second. This includes semaphore,
+scheduler and thread-start effects, rather than only register save/restore.
+
+Stack analysis ran while AD2 generated 100 Hz flow pulses into GPIO3 and while
+the console executed `calib`. The closest stack was the system `idle` thread at
+228/256 B; `control_tid` used 236/1024 B. The optional SSD1306 was unavailable,
+so no full I2C display redraw was included in this particular high-water run.
+See EV-W04-COST-002 and EV-W04-STACK-003.
+
+### 3.6 Future-week evidence rule
 
 Each new measurement record must state:
 
@@ -361,8 +423,8 @@ they were obtained.
 
 | Task | `R_i` | `D_i` | Margin `D_i - R_i` | Analytical verdict | Measured verdict |
 |---|---:|---:|---:|---|---|
-| Sampling + safety check | Not yet bounded analytically | 1 ms | TBD | PENDING | FAIL — max period 6.845 ms baseline; 414.06 ms during `calib` |
-| Control loop | TBD | 10 ms | TBD | PENDING | PENDING |
+| Sampling + safety check | Not yet bounded analytically | 1 ms | TBD | PENDING | FAIL strict — C6 full kernel maximum 1.0056 ms during `calib`; major mitigation versus 403.47 ms superloop |
+| Control loop | TBD | 10 ms | TBD | PENDING | FAIL strict — C6 full kernel maximum 10.003 ms during `calib`; major mitigation versus 412.47 ms superloop |
 
 ## 5. Functional safety
 
