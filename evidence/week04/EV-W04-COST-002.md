@@ -12,7 +12,7 @@ termina `task_sampling()` hasta que `control_thread` entra en
   `esp32c6_devkitc/esp32c6/hpcore`.
 - Firmware: migración completa de Week 4 en `firmware/superloop/`.
 - Instrumento: Analog Discovery 2, WaveForms 3.25.1, Logic / Record,
-  30 M muestras a 10 MHz: ventana de 3 s y resolución de 0.1 us.
+  30 M muestras a 10 MHz: ventana de 3 s y resolución de 0.1 µs.
 - Conexiones: DIO0 -> GPIO18 (`instr_samp`), DIO1 -> GPIO19 (`instr_ctrl`) y
   GND común.
 - Carga: ninguna orden de consola durante la captura.
@@ -23,19 +23,19 @@ termina `task_sampling()` hasta que `control_thread` entra en
 
 | Captura | `Delta X` |
 |---|---:|
-| [CONTEXT-003](EV-W04-CONTEXT-003.png) | 11.1 us |
-| [CONTEXT-004](EV-W04-CONTEXT-004.png) | **11.7 us** |
-| [CONTEXT-005](EV-W04-CONTEXT-005.png) | 11.0 us |
-| [CONTEXT-006](EV-W04-CONTEXT-006.png) | 11.4 us |
-| [CONTEXT-007](EV-W04-CONTEXT-007.png) | 11.33 us |
+| [CONTEXT-003](EV-W04-CONTEXT-003.png) | 11.1 µs |
+| [CONTEXT-004](EV-W04-CONTEXT-004.png) | **11.7 µs** |
+| [CONTEXT-005](EV-W04-CONTEXT-005.png) | 11.0 µs |
+| [CONTEXT-006](EV-W04-CONTEXT-006.png) | 11.4 µs |
+| [CONTEXT-007](EV-W04-CONTEXT-007.png) | 11.33 µs |
 
-El máximo observado es **11.7 us**.
+El máximo observado es **11.7 µs**.
 
 Cada 10 muestras de un muestreo de 1 kHz se libera control, es decir, hay
 100 de estos hand-offs por segundo. La estimación solicitada es:
 
 ```text
-100 hand-offs/s × 11.7 us = 1170 us/s = 1.17 ms/s = 0.117 % de 1 s
+100 hand-offs/s × 11.7 µs = 1170 µs/s = 1.17 ms/s = 0.117 % de 1 s
 ```
 
 ## Lectura y límite

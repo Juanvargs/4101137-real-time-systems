@@ -26,8 +26,9 @@ uso de pila después de actividad de flujo y de una calibración.
   por tanto, el dato de `display_tid` corresponde al hilo y no a un redibujado
   I2C completo.
 
-La salida original está preservada visualmente en
-[EV-W04-STACK-004.png](EV-W04-STACK-004.png).
+La captura de la terminal con la salida original de `threads` es:
+
+![Salida de `threads` bajo carga](EV-W04-STACK-004.png)
 
 ## Resultado de `threads`
 
