@@ -19,6 +19,15 @@
 
 El log también muestra los pares `thread_busy_wait_enter` / `thread_busy_wait_exit` con `usec_to_wait=400`, confirmando que el hilo de consola estaba ejecutando `calib`.
 
+## Por qué solo sobreviven unos 75 ms de `calib`
+
+`trace.conf` reserva 32768 bytes para el búfer CTF. Mientras `console_tid` hace
+el `k_busy_wait(400)` repetidamente, no cede la CPU; el `tracing_thread`, que
+tiene prioridad baja, no alcanza a vaciar el búfer y los eventos posteriores se
+pierden. La exportación de texto muestra 189 pares de entrada/salida de la espera:
+189 × 400 µs = **75.6 ms**, aproximadamente la porción de calibración que quedó
+registrada. La calibración completa sigue durando cerca de 400 ms.
+
 ## Liberación de control
 
 En el tick de aproximadamente **12 ms** del registro:

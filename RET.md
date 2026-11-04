@@ -385,6 +385,18 @@ See EV-W04-COST-002 and EV-W04-STACK-003.
 
 ### 3.6 Week 5 — Tracing and instrumentation cost
 
+#### Predictions and measurements
+
+The predictions below were stated before taking the Week-5 measurements. CPU
+share was descriptive, so the guide did not request a prediction for that row.
+
+| Measurement | Prediction | Observed value | Contrast |
+|---|---:|---:|---|
+| Context switch in CTF trace | 15 µs | 4.837 µs | Week-4 GPIO hand-off: 11.7 µs on ESP32-C6; different board and transition |
+| Tick ISR to sampling start in CTF trace | 12 µs | 20.012 µs | Firmware `lat_peak_us`: 30 µs; cumulative peak, not necessarily this tick |
+| Per-thread CPU share in normal operation | Not requested | `idle` 97.99 %, `sampling_tid` 0.94 %, `tracing_thread` 0.79 %, other threads as below | Shares derived from analyzer cycles and sum to 100 % |
+| Increase in maximum sampling jitter with tracing | 10 µs | 10.4 µs | AD2: 12.7 µs tracing on minus 2.3 µs tracing off |
+
 Week 5 used the ESP32-S3 DevKitC. The CTF event log shows a tick interrupt at
 130.925 µs, `sampling_tid` switched in at 150.937 µs, then the sampling thread
 blocked and `console_tid` resumed. The observed ISR-to-sampling-start interval
@@ -416,6 +428,13 @@ cycle counts and normalized by their total. This analyzer snapshot is cumulative
 since boot. `CONFIG_TRACING_IDLE=n` remains necessary in `trace.conf` to keep the
 UART CTF stream within bandwidth; therefore the Gantt viewer alone cannot provide
 the complete idle-inclusive CPU distribution.
+
+The calibration trace contains only the first approximately 75 ms of the
+`calib` busy-wait loop because the 32 KiB CTF buffer fills while the low-priority
+`tracing_thread` cannot drain it: the higher-priority console thread spins in
+`k_busy_wait(400)` instead of yielding. The text export contains 189 busy-wait
+enter/exit pairs; 189 × 400 µs = 75.6 ms, consistent with the buffer-limited
+portion that survives. The command itself continues for about 400 ms.
 
 #### Week 5 evidence
 
