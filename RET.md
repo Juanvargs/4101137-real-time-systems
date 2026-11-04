@@ -175,6 +175,11 @@ exist.
 | EV-W04-AB-001 | Week 4 | Compare C6 superloop and full kernel migration | REQ-CTRL-01, 03, 06 | ESP32-C6 DevKitC compatible | `calib`: sampling jitter 402.47 ms -> 6.2 µs; control max period 412.47 -> 10.003 ms | FAIL strict; strong mitigation demonstrated | `evidence/week04/EV-W04-AB-001.md` |
 | EV-W04-COST-002 | Week 4 | Measure visible sampling-to-control hand-off gap | N/A | ESP32-C6 DevKitC compatible | Max observed gap 11.7 µs; 1.17 ms/s estimated at 100 hand-offs/s | CHARACTERIZED | `evidence/week04/EV-W04-COST-002.md` |
 | EV-W04-STACK-003 | Week 4 | Measure thread stack high-water marks under load | N/A | ESP32-C6 DevKitC compatible | `idle` 228/256 B (89 %); `control_tid` 236/1024 B | CHARACTERIZED; idle margin needs review | `evidence/week04/EV-W04-STACK-003.md` |
+| EV-W05-CPU-001 | Week 5 | Normal-operation per-thread CPU share, including idle and tracer | N/A | ESP32-S3 DevKitC | `idle` 97.99 %; `tracing_thread` 0.79 %; shares normalized from analyzer cycle counts | CHARACTERIZED; cumulative since boot | `evidence/week05/EV-W05-CPU-001.md` |
+| EV-W05-PREEMPT-002 | Week 5 | CTF event sequence during `calib` | N/A | ESP32-S3 DevKitC | Console → sampling observed switch interval 4.837 µs; ISR-to-sampling start 20.012 µs; `lat_peak_us` 30 µs | CHARACTERIZED; CTF overhead applies | `evidence/week05/EV-W05-PREEMPT-002.md` |
+| EV-W05-CONTROL-003 | Week 5 | Tenth-sample control semaphore release | N/A | ESP32-S3 DevKitC | `semaphore_give` 12.171 ms; `control_tid` switched in 12.195 ms | CHARACTERIZED | `evidence/week05/EV-W05-CONTROL-003.png` |
+| EV-W05-JITTER-ON-001 | Week 5 | Sampling period with tracing enabled | REQ-CTRL-01 | ESP32-S3 DevKitC | Mean 0.99999 ms; min 0.98730 ms; max 1.0065 ms; max absolute deviation 12.7 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-ON-001.png` |
+| EV-W05-JITTER-OFF-001 | Week 5 | Sampling period with tracing disabled | REQ-CTRL-01 | ESP32-S3 DevKitC | Mean 1.00000 ms; min 0.99770 ms; max 1.0021 ms; max absolute deviation 2.3 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-OFF-001.png` |
 
 ### 3.2 Week 1 — environment and reproducibility
 
@@ -378,7 +383,48 @@ the console executed `calib`. The closest stack was the system `idle` thread at
 so no full I2C display redraw was included in this particular high-water run.
 See EV-W04-COST-002 and EV-W04-STACK-003.
 
-### 3.6 Future-week evidence rule
+### 3.6 Week 5 — Tracing and instrumentation cost
+
+Week 5 used the ESP32-S3 DevKitC. The CTF event log shows a tick interrupt at
+130.925 µs, `sampling_tid` switched in at 150.937 µs, then the sampling thread
+blocked and `console_tid` resumed. The observed ISR-to-sampling-start interval
+was 20.012 µs; the firmware's cumulative `lat_peak_us` was 30 µs. The observed
+`console_tid`-to-`sampling_tid` switch interval in that trace was 4.837 µs. These
+are CTF timestamps and include tracing effects; Week 4's 11.7 µs GPIO hand-off
+was measured on the ESP32-C6, so the values are not a same-board instrument A/B.
+
+At the control release, `semaphore_give` occurred at 12.171 ms, `control_tid`
+became ready at 12.175 ms, and switched in at 12.195 ms after sampling blocked.
+The event log is retained in `EV-W05-CONTROL-003.png`.
+
+The AD2 measured a nominal 1 ms sampling period with tracing enabled and
+disabled under the same 30 M sample, 10 MHz protocol. Define maximum jitter here
+as the greatest absolute deviation of the observed period from 1 ms:
+
+| Condition | Mean period | Minimum | Maximum | Maximum absolute jitter |
+|---|---:|---:|---:|---:|
+| CTF tracing on | 0.99999 ms | 0.98730 ms | 1.0065 ms | 12.7 µs |
+| CTF tracing off | 1.00000 ms | 0.99770 ms | 1.0021 ms | 2.3 µs |
+
+The observed increase in maximum absolute jitter with tracing was **10.4 µs**.
+This is the measured observer cost for this S3 run, not a guaranteed constant.
+
+For normal-operation CPU share, the `threads` analyzer output included both
+`idle` and `tracing_thread`. Its printed whole-number CPU percentages truncated
+small shares to zero, so shares were calculated from the reported per-thread
+cycle counts and normalized by their total. This analyzer snapshot is cumulative
+since boot. `CONFIG_TRACING_IDLE=n` remains necessary in `trace.conf` to keep the
+UART CTF stream within bandwidth; therefore the Gantt viewer alone cannot provide
+the complete idle-inclusive CPU distribution.
+
+#### Week 5 evidence
+
+- `EV-W05-CPU-001.md`: analyzer transcript, cycle counts, and normalized shares.
+- `EV-W05-PREEMPT-002.md` and `.png`: preemption trace during `calib`.
+- `EV-W05-CONTROL-003.png`: semaphore release and control-thread dispatch events.
+- `EV-W05-JITTER-ON-001.png` and `EV-W05-JITTER-OFF-001.png`: paired AD2 captures.
+
+### 3.7 Future-week evidence rule
 
 Each new measurement record must state:
 
