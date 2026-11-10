@@ -28,7 +28,7 @@
 | 0.4 | 2026-10-10 | Juan Pablo Vargas Cordoba | Added observed widths for control, console, telemetry, and flow batch |
 | 0.5 | 2026-10-15 | Juan Pablo Vargas Cordoba | Added ESP32-C6 superloop versus sampling-thread timing evidence |
 | 0.6 | 2026-10-27 | Juan Pablo Vargas Cordoba | Added complete kernel A/B, visible hand-off cost, stack high-water marks, and ADR-001 |
-| 0.7 | 2026-11-10 | Juan Pablo Vargas Cordoba | Added Week 5 tracing evidence; fixed requirement links, evidence numbering, stale §4.1 inputs, and open items |
+| 0.7 | 2026-11-10 | Juan Pablo Vargas Cordoba | Added Week 5 tracing evidence, annotated traces, trace-vs-GPIO analysis and jitter records; fixed requirement links, evidence numbering, stale §4.1 inputs, and open items |
 
 ## Purpose and evidence rule
 
@@ -80,13 +80,18 @@ under a declared protocol. A future maximum observed value will be reported as
 
 | Task | Requirement | Type | Activation/period | Deadline | Measured `C_i` | Jitter bound | Priority/policy | Measurement method |
 |---|---|---|---:|---:|---:|---:|---|---|
-| Sensor sampling | REQ-CTRL-03 | Hard | Periodic, 1 ms (1 kHz) | 1 ms | NUCLEO: `C_obs,max` 3 µs baseline; 4 µs cache-off; 12 µs during `calib`. C6: `C_obs,max` 2.7 µs in Week 3. | C6 full kernel: 6 µs idle, 6.2 µs with `calib` observed max | `sampling_tid`, preemptive prio. 2 | GPIO + analyzer |
-| Control loop | REQ-CTRL-01 | Hard | Periodic, 10 ms | 10 ms | `C_obs,max` 0.7 µs (300 NUCLEO runs, 10 MHz capture) | C6 full kernel period with `calib`: 10.003 ms observed max | `control_tid`, preemptive prio. 3 | GPIO + analyzer |
+| Sensor sampling | REQ-CTRL-03 | Hard | Periodic, 1 ms (1 kHz) | 1 ms | NUCLEO: `C_obs,max` 3 µs baseline; 4 µs cache-off; 12 µs during `calib`. C6: `C_obs,max` 2.7 µs in Week 3. | C6 full kernel: 6 µs idle, 6.2 µs with `calib` observed max | `sampling_tid`, preemptive prio. 2 | GPIO DIO0 + AD2 logic analyzer (all `C_i` values) |
+| Control loop | REQ-CTRL-01 | Hard | Periodic, 10 ms | 10 ms | `C_obs,max` 0.7 µs (300 NUCLEO runs, 10 MHz capture) | C6 full kernel period with `calib`: 10.003 ms observed max | `control_tid`, preemptive prio. 3 | GPIO DIO1 + AD2 logic analyzer |
 | Overpressure emergency stop | REQ-CTRL-02 | Hard | Event-triggered | < 5 ms | Shared with sampling; standalone response not measured | N/A | TBD | Instrumented input-to-output latency |
-| Command console | REQ-CTRL-05, REQ-CTRL-06 | Firm | Event-triggered/sporadic | TBD | `status` path: 4 us to 6.6010 ms across 8 received bytes; `calib` blocks the loop for approximately 414 ms; neither is a WCET | N/A | `console_tid`, preemptive prio. 9 | UART + DIO2 trace |
-| Telemetry | REQ-CTRL-04 | Soft | Periodic, 1 s | 1 s (derived from task period) | `C_obs,max` 5.7770 ms (30 runs) | TBD | `telemetry_tid`, preemptive prio. 8 | DIO3 trace |
-| Flow batch | N/A | N/A | Every 100 flow pulses | TBD | `C_obs,max` 44 us (30 batches at 100 Hz stimulus) | N/A | private `flow_wq`, preemptive prio. 5 | DIO4 trace |
-| Display HMI | N/A | Soft | Periodic, 500 ms when enabled | TBD | Not enabled on this run | N/A | `display_tid`, preemptive prio. 7 | DIO5 trace |
+| Command console | REQ-CTRL-05, REQ-CTRL-06 | Firm | Event-triggered/sporadic | TBD | `status` path: 4 us to 6.6010 ms across 8 received bytes; `calib` blocks the loop for approximately 414 ms; neither is a WCET | N/A | `console_tid`, preemptive prio. 9 | GPIO DIO2 + AD2 logic analyzer; UART for command input |
+| Telemetry | REQ-CTRL-04 | Soft | Periodic, 1 s | 1 s (derived from task period) | `C_obs,max` 5.7770 ms (30 runs) | TBD | `telemetry_tid`, preemptive prio. 8 | GPIO DIO3 + AD2 logic analyzer |
+| Flow batch | N/A | N/A | Every 100 flow pulses | TBD | `C_obs,max` 44 us (30 batches at 100 Hz stimulus) | N/A | private `flow_wq`, preemptive prio. 5 | GPIO DIO4 + AD2 logic analyzer |
+| Display HMI | N/A | Soft | Periodic, 500 ms when enabled | TBD | Not enabled on this run | N/A | `display_tid`, preemptive prio. 7 | GPIO DIO5 + AD2 logic analyzer (planned) |
+
+Instrument rule (from Week 5): every `C_i` above was measured by GPIO pulse width
+on the AD2 logic analyzer, which does not perturb the target. CTF trace
+timestamps include the tracer's own cost (EV-W05-JITTER-ON-004/OFF-005) and are
+used only to explain the order of events, never as a `C_i` source.
 
 No unmeasured execution time, telemetry period, console deadline, sensor deadline,
 or jitter bound has been invented; each unresolved value remains explicit until the
@@ -178,10 +183,10 @@ exist.
 | EV-W04-COST-002 | Week 4 | Measure visible sampling-to-control hand-off gap | N/A | ESP32-C6 DevKitC compatible | Max observed gap 11.7 µs; 1.17 ms/s estimated at 100 hand-offs/s | CHARACTERIZED | `evidence/week04/EV-W04-COST-002.md` |
 | EV-W04-STACK-003 | Week 4 | Measure thread stack high-water marks under load | N/A | ESP32-C6 DevKitC compatible | `idle` 228/256 B (89 %); `control_tid` 236/1024 B | CHARACTERIZED; idle margin needs review | `evidence/week04/EV-W04-STACK-003.md` |
 | EV-W05-CPU-001 | Week 5 | Normal-operation per-thread CPU share, including idle and tracer | N/A | ESP32-S3 DevKitC | `idle` 97.99 %; `tracing_thread` 0.79 %; shares normalized from analyzer cycle counts | CHARACTERIZED; cumulative since boot | `evidence/week05/EV-W05-CPU-001.md` |
-| EV-W05-PREEMPT-002 | Week 5 | CTF event sequence during `calib` | N/A | ESP32-S3 DevKitC | Console → sampling observed switch interval 4.837 µs; ISR-to-sampling start 20.012 µs; `lat_peak_us` 30 µs | CHARACTERIZED; CTF overhead applies | `evidence/week05/EV-W05-PREEMPT-002.md` |
-| EV-W05-CONTROL-003 | Week 5 | Tenth-sample control semaphore release | N/A | ESP32-S3 DevKitC | `semaphore_give` 12.171 ms; `control_tid` switched in 12.195 ms | CHARACTERIZED | `evidence/week05/EV-W05-CONTROL-003.png` (screenshot; context in `EV-W05-PREEMPT-002.md`) |
-| EV-W05-JITTER-ON-004 | Week 5 | Sampling period with tracing enabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 0.99999 ms; min 0.98730 ms; max 1.0065 ms; max absolute deviation 12.7 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-ON-004.png` (screenshot only; record pending OI-007) |
-| EV-W05-JITTER-OFF-005 | Week 5 | Sampling period with tracing disabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 1.00000 ms; min 0.99770 ms; max 1.0021 ms; max absolute deviation 2.3 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-OFF-005.png` (screenshot only; record pending OI-007) |
+| EV-W05-PREEMPT-002 | Week 5 | CTF event sequence during `calib` | N/A | ESP32-S3 DevKitC | Console → sampling observed switch interval 4.837 µs; ISR-to-sampling start 20.012 µs; `lat_peak_us` 30 µs | CHARACTERIZED; CTF overhead applies | `evidence/week05/EV-W05-PREEMPT-002.md`; annotated: `EV-W05-PREEMPT-002-annotated.png` |
+| EV-W05-CONTROL-003 | Week 5 | Tenth-sample control semaphore release | N/A | ESP32-S3 DevKitC | `semaphore_give` 12.171 ms; `control_tid` switched in 12.195 ms | CHARACTERIZED | `evidence/week05/EV-W05-CONTROL-003-annotated.png`; context in `EV-W05-PREEMPT-002.md` |
+| EV-W05-JITTER-ON-004 | Week 5 | Sampling period with tracing enabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 0.99999 ms; min 0.98730 ms; max 1.0065 ms; max absolute deviation 12.7 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-ON-004.md` |
+| EV-W05-JITTER-OFF-005 | Week 5 | Sampling period with tracing disabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 1.00000 ms; min 0.99770 ms; max 1.0021 ms; max absolute deviation 2.3 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-OFF-005.md` |
 
 ### 3.2 Week 1 — environment and reproducibility
 
@@ -407,9 +412,49 @@ was 20.012 µs; the firmware's cumulative `lat_peak_us` was 30 µs. The observed
 are CTF timestamps and include tracing effects; Week 4's 11.7 µs GPIO hand-off
 was measured on the ESP32-C6, so the values are not a same-board instrument A/B.
 
-At the control release, `semaphore_give` occurred at 12.171 ms, `control_tid`
-became ready at 12.175 ms, and switched in at 12.195 ms after sampling blocked.
-The event log is retained in `EV-W05-CONTROL-003.png`.
+The chain matches the lab's expected sequence: tick ISR → `sampling_tid` ready
+(the ISR's `k_msgq_put`) → `console_tid` switched out with no `thread_sched_pend`,
+so it was preempted while still ready → `sampling_tid` runs and `instr_samp`
+(GPIO4, `pins=16`) rises → `sampling_tid` pends in `k_msgq_get` → `console_tid`
+resumes its `k_busy_wait(400)`.
+
+At the tenth tick, `k_sem_give` does **not** send the CPU to control. The give
+occurred at 12.171 ms and `control_tid` became ready at 12.175 ms. Sampling
+(priority 2) kept the CPU until it pended at 12.184 ms, and only then was
+`control_tid` (priority 3) switched in, at 12.195 ms, raising `instr_ctrl`
+(GPIO5, `pins=32`) at 12.202 ms. The annotated event logs are
+`EV-W05-PREEMPT-002-annotated.png` and `EV-W05-CONTROL-003-annotated.png`.
+
+#### Why the trace and the GPIO measurements differ
+
+The two instruments do not time the same thing, so their numbers are not
+expected to match:
+
+1. **Different observation points.** CTF timestamps are taken in software at
+   kernel hooks (`isr_enter`, `thread_switched_out/in`). GPIO edges come from
+   `instr_set()` calls inside the task code. The CTF "switch" of 4.837 µs is
+   only the gap between the switched-out and switched-in hooks within one
+   switch. The Week-4 11.7 µs GPIO gap runs from the end of sampling's code to
+   the start of control's code, and therefore also includes `k_sem_give`, the
+   pend, the scheduler decision and the return from `k_sem_take`.
+2. **Different transitions.** The 4.837 µs trace value is a console →
+   sampling preemption; the 11.7 µs GPIO value is a sampling → control
+   semaphore hand-off.
+3. **The tracer adds time to what it observes.** Every traced call costs time
+   on the S3: one traced `gpio_port_set_bits_raw` took 154.654 → 157.287 µs,
+   about 2.6 µs from enter to exit. The ISR → sampling-start path of 20.012 µs
+   contains three recorded events, so part of it is the tracer itself. This is
+   consistent with the 10.4 µs jitter increase measured by the AD2, which does
+   not perturb the target.
+4. **Different statistics.** The 20.012 µs value is one tick. `lat_peak_us`
+   (30 µs) is the firmware's cumulative maximum since boot, taken with tracing
+   enabled, so it need not correspond to the traced tick.
+5. **Different boards.** The Week-4 GPIO reference was measured on the
+   ESP32-C6; the Week-5 trace was taken on the ESP32-S3.
+
+For these reasons the AD2 remains the judge of the numbers (the period and
+jitter of EV-W05-JITTER-ON-004/OFF-005), while the CTF trace is used for the
+story: who ran, in what order, and why.
 
 The AD2 measured a nominal 1 ms sampling period with tracing enabled and
 disabled under the same 30 M sample, 10 MHz protocol. Define maximum jitter here
@@ -441,11 +486,11 @@ portion that survives. The command itself continues for about 400 ms.
 #### Week 5 evidence
 
 - `EV-W05-CPU-001.md`: analyzer transcript, cycle counts, and normalized shares.
-- `EV-W05-PREEMPT-002.md` and `.png`: preemption trace during `calib`.
-- `EV-W05-CONTROL-003.png`: semaphore release and control-thread dispatch events.
-- `EV-W05-JITTER-ON-004.png` and `EV-W05-JITTER-OFF-005.png`: paired AD2 captures.
-  Their `.md` records required by §3.7 (commit, configuration, sample count)
-  are still pending (OI-007).
+- `EV-W05-PREEMPT-002.md`, `.png` and `-annotated.png`: preemption trace during `calib`.
+- `EV-W05-CONTROL-003.png` and `-annotated.png`: semaphore release and control-thread dispatch.
+- `EV-W05-JITTER-ON-004.md` and `EV-W05-JITTER-OFF-005.md` with their `.png`:
+  paired AD2 captures. The firmware commit and the workload still need to be
+  confirmed (OI-007).
 
 ### 3.7 Future-week evidence rule
 
@@ -534,5 +579,5 @@ they were obtained.
 | OI-004 | Define numeric jitter and firm/soft deadlines | Team/instructor | Before verification | PARTIAL — sampling deadline fixed at 1 ms; console firm deadline remains TBD |
 | OI-005 | Declare/install the editor used for the course | Team | Before week 1 | CLOSED — GNU nano 7.2 used |
 | OI-006 | Record the ESP32-S3 DevKitC serial/nickname used in Week 5 | Team | Week 6 | OPEN |
-| OI-007 | Write `.md` records (commit, configuration, instrument settings, sample count) for EV-W05-JITTER-ON-004 and EV-W05-JITTER-OFF-005 | Team | Week 6 | OPEN |
+| OI-007 | Confirm firmware commit and workload in EV-W05-JITTER-ON-004 and EV-W05-JITTER-OFF-005 | Team | Week 6 | PARTIAL — records written from the captures; commit and workload unconfirmed |
 | OI-008 | Fix the reference platform for §4 schedulability inputs and measure every `C_i` on it | Team | Week 6 | OPEN |

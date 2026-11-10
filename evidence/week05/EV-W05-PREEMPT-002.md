@@ -60,6 +60,10 @@ Los timestamps CTF incluyen el costo de instrumentación y no sustituyen la medi
 Se conserva el registro de eventos en `EV-W05-PREEMPT-002.png`. En la captura
 `EV-W05-CONTROL-003.png`, los eventos clave están en las líneas 242–248:
 `semaphore_give_enter`, `control_tid` listo, muestreo bloqueado y `control_tid`
-ejecutándose y tomando el semáforo. Las capturas se dejan como están, sin añadir
-flechas. Los valores transcritos arriba corresponden a las imágenes compartidas
-durante la sesión.
+ejecutándose y tomando el semáforo. Los valores transcritos arriba corresponden
+a las imágenes compartidas durante la sesión.
+
+Las versiones anotadas, con flechas y la cadena de eventos numerada, son
+`EV-W05-PREEMPT-002-annotated.png` y `EV-W05-CONTROL-003-annotated.png`. Los
+originales se conservan sin modificar. Las anotaciones se generaron con
+PIL (Python) sobre las capturas originales; no cambian ningún valor.
