@@ -9,13 +9,14 @@
 | Course | Real-Time Systems — UNAL 4101137 |
 | Team | Individual — Juan Pablo Vargas Cordoba |
 | Authors | Juan Pablo Vargas Cordoba |
-| Status | Draft — Week 4 kernel A/B and stack evidence recorded |
-| Version | 0.6 |
-| Date | 2026-10-27 |
-| Repository baseline | Week 4 complete kernel migration; evidence commit pending |
+| Status | Draft — Week 5 tracing and instrumentation-cost evidence recorded |
+| Version | 0.7 |
+| Date | 2026-11-10 |
+| Repository baseline | Week 5 tracing evidence committed (`87d4067`, 2026-11-04) |
 | Starter board | NUCLEO-G474RE — student-owned; course baseline differs |
 | Board/debug identifier | STLINK-V3 `003400303232510139353236` |
-| Week 3 comparison MCU | ESP32-C6 DevKitC compatible, 4 MB flash |
+| Week 3–4 comparison MCU | ESP32-C6 DevKitC compatible, 4 MB flash |
+| Week 5 tracing MCU | ESP32-S3 DevKitC — identifier not yet recorded (OI-006) |
 
 ### Revision history
 
@@ -27,6 +28,7 @@
 | 0.4 | 2026-10-10 | Juan Pablo Vargas Cordoba | Added observed widths for control, console, telemetry, and flow batch |
 | 0.5 | 2026-10-15 | Juan Pablo Vargas Cordoba | Added ESP32-C6 superloop versus sampling-thread timing evidence |
 | 0.6 | 2026-10-27 | Juan Pablo Vargas Cordoba | Added complete kernel A/B, visible hand-off cost, stack high-water marks, and ADR-001 |
+| 0.7 | 2026-11-10 | Juan Pablo Vargas Cordoba | Added Week 5 tracing evidence; fixed requirement links, evidence numbering, stale §4.1 inputs, and open items |
 
 ## Purpose and evidence rule
 
@@ -177,9 +179,9 @@ exist.
 | EV-W04-STACK-003 | Week 4 | Measure thread stack high-water marks under load | N/A | ESP32-C6 DevKitC compatible | `idle` 228/256 B (89 %); `control_tid` 236/1024 B | CHARACTERIZED; idle margin needs review | `evidence/week04/EV-W04-STACK-003.md` |
 | EV-W05-CPU-001 | Week 5 | Normal-operation per-thread CPU share, including idle and tracer | N/A | ESP32-S3 DevKitC | `idle` 97.99 %; `tracing_thread` 0.79 %; shares normalized from analyzer cycle counts | CHARACTERIZED; cumulative since boot | `evidence/week05/EV-W05-CPU-001.md` |
 | EV-W05-PREEMPT-002 | Week 5 | CTF event sequence during `calib` | N/A | ESP32-S3 DevKitC | Console → sampling observed switch interval 4.837 µs; ISR-to-sampling start 20.012 µs; `lat_peak_us` 30 µs | CHARACTERIZED; CTF overhead applies | `evidence/week05/EV-W05-PREEMPT-002.md` |
-| EV-W05-CONTROL-003 | Week 5 | Tenth-sample control semaphore release | N/A | ESP32-S3 DevKitC | `semaphore_give` 12.171 ms; `control_tid` switched in 12.195 ms | CHARACTERIZED | `evidence/week05/EV-W05-CONTROL-003.png` |
-| EV-W05-JITTER-ON-001 | Week 5 | Sampling period with tracing enabled | REQ-CTRL-01 | ESP32-S3 DevKitC | Mean 0.99999 ms; min 0.98730 ms; max 1.0065 ms; max absolute deviation 12.7 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-ON-001.png` |
-| EV-W05-JITTER-OFF-001 | Week 5 | Sampling period with tracing disabled | REQ-CTRL-01 | ESP32-S3 DevKitC | Mean 1.00000 ms; min 0.99770 ms; max 1.0021 ms; max absolute deviation 2.3 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-OFF-001.png` |
+| EV-W05-CONTROL-003 | Week 5 | Tenth-sample control semaphore release | N/A | ESP32-S3 DevKitC | `semaphore_give` 12.171 ms; `control_tid` switched in 12.195 ms | CHARACTERIZED | `evidence/week05/EV-W05-CONTROL-003.png` (screenshot; context in `EV-W05-PREEMPT-002.md`) |
+| EV-W05-JITTER-ON-004 | Week 5 | Sampling period with tracing enabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 0.99999 ms; min 0.98730 ms; max 1.0065 ms; max absolute deviation 12.7 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-ON-004.png` (screenshot only; record pending OI-007) |
+| EV-W05-JITTER-OFF-005 | Week 5 | Sampling period with tracing disabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 1.00000 ms; min 0.99770 ms; max 1.0021 ms; max absolute deviation 2.3 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-OFF-005.png` (screenshot only; record pending OI-007) |
 
 ### 3.2 Week 1 — environment and reproducibility
 
@@ -194,7 +196,7 @@ remain open before week 1 is complete:
 | ARM toolchain for the starter board is installed | PASS | EV-W01-ENV-001 |
 | Xtensa toolchain for ESP32-S3 is installed | PASS | EV-W01-ENV-001 |
 | User belongs to the serial-access group (`dialout`) | PASS | EV-W01-ENV-001 |
-| VS Code or the selected editor is available | PENDING | `code` not found; alternative editor not yet declared |
+| VS Code or the selected editor is available | PASS | GNU nano 7.2 declared as the course editor (OI-005) |
 | Starter-board target confirmed | PASS | NUCLEO-G474RE; Zephyr target `nucleo_g474re` |
 | `blinky` builds for the physical board | PASS | EV-W01-BUILD-002 |
 | `blinky` is flashed and LD2 blinks | PASS | EV-W01-HW-003 |
@@ -441,7 +443,9 @@ portion that survives. The command itself continues for about 400 ms.
 - `EV-W05-CPU-001.md`: analyzer transcript, cycle counts, and normalized shares.
 - `EV-W05-PREEMPT-002.md` and `.png`: preemption trace during `calib`.
 - `EV-W05-CONTROL-003.png`: semaphore release and control-thread dispatch events.
-- `EV-W05-JITTER-ON-001.png` and `EV-W05-JITTER-OFF-001.png`: paired AD2 captures.
+- `EV-W05-JITTER-ON-004.png` and `EV-W05-JITTER-OFF-005.png`: paired AD2 captures.
+  Their `.md` records required by §3.7 (commit, configuration, sample count)
+  are still pending (OI-007).
 
 ### 3.7 Future-week evidence rule
 
@@ -466,11 +470,11 @@ they were obtained.
 
 | Task | `C_i` evidence | `C_i` used | `T_i` | `D_i` | `B_i` | Notes |
 |---|---|---:|---:|---:|---:|---|
-| Sampling + safety check | EV-W02-BASELINE-002 | `C_obs,max` 3 us (cache-on baseline) | 1 ms | 1 ms | 0 (no mutexes) | Measured period still fails due to loop interference |
-| Control loop | TBD | TBD | 10 ms | 10 ms | TBD | Pending week 2 |
-| Command console | TBD | TBD | Sporadic | TBD | TBD | Pending week 2 |
-| Telemetry | TBD | TBD | 1 s | TBD | TBD | Period provisional |
-| Display HMI | TBD | TBD | 500 ms | TBD | TBD | Optional task |
+| Sampling + safety check | EV-W02-BASELINE-002 (NUCLEO, 3 µs); EV-W03-CI-008 (C6, 2.7 µs) | TBD — reference platform pending (OI-008) | 1 ms | 1 ms | 0 (no mutexes) | GPIO + analyzer |
+| Control loop | EV-W02-TASKS-006 (NUCLEO, 0.7 µs) | TBD — reference platform pending (OI-008) | 10 ms | 10 ms | TBD | GPIO + analyzer; C6/S3 width not yet measured |
+| Command console | EV-W02-TASKS-006 (NUCLEO, `status` 6.6010 ms); EV-W02-BLOCK-005 (`calib` ≈ 414 ms) | TBD | Sporadic | TBD | TBD | GPIO + analyzer; firm deadline open (OI-004) |
+| Telemetry | EV-W02-TASKS-006 (NUCLEO, 5.7770 ms) | TBD — reference platform pending (OI-008) | 1 s | 1 s (derived from task period) | TBD | GPIO + analyzer |
+| Display HMI | Not measured | TBD | 500 ms | TBD | TBD | Optional task; not enabled in measured runs |
 
 ### 4.2 Tests and results
 
@@ -524,8 +528,11 @@ they were obtained.
 
 | ID | Item | Owner | Due | Status |
 |---|---|---|---|---|
-| OI-001 | Confirm course-provided baseline board for weeks 1–2; student bring-up uses NUCLEO-G474RE | Team/instructor | Before week 2 | OPEN |
+| OI-001 | Confirm course-provided baseline board for weeks 1–2; student bring-up uses NUCLEO-G474RE | Team/instructor | Before week 2 | OPEN — overdue; weeks 1–2 were run on the NUCLEO-G474RE as a declared deviation from the course NUCLEO-L476RG |
 | OI-002 | Record team member names | Team | Week 1 | CLOSED — Juan Pablo Vargas Cordoba |
 | OI-003 | Record board model, serial, and nickname | Team | Week 1 | CLOSED — NUCLEO-G474RE and STLINK-V3 identifier recorded |
 | OI-004 | Define numeric jitter and firm/soft deadlines | Team/instructor | Before verification | PARTIAL — sampling deadline fixed at 1 ms; console firm deadline remains TBD |
 | OI-005 | Declare/install the editor used for the course | Team | Before week 1 | CLOSED — GNU nano 7.2 used |
+| OI-006 | Record the ESP32-S3 DevKitC serial/nickname used in Week 5 | Team | Week 6 | OPEN |
+| OI-007 | Write `.md` records (commit, configuration, instrument settings, sample count) for EV-W05-JITTER-ON-004 and EV-W05-JITTER-OFF-005 | Team | Week 6 | OPEN |
+| OI-008 | Fix the reference platform for §4 schedulability inputs and measure every `C_i` on it | Team | Week 6 | OPEN |
