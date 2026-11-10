@@ -1,0 +1,16 @@
+/*
+ * Fig. 4.13 instrumentation on the ESP32-S3-DevKitC-1. Same header pins as
+ * firmware/kernel, so the analyzer ribbon stays where it was:
+ *   GPIO4 (DIO0) tau1 job active   GPIO5 (DIO1) tau2 job active
+ *   GPIO6 (DIO2) deadline-miss pulse
+ */
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+	instr {
+		compatible = "gpio-leds";
+		instr_t1: instr_t1 { gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>; };
+		instr_t2: instr_t2 { gpios = <&gpio0 5 GPIO_ACTIVE_HIGH>; };
+		instr_miss: instr_miss { gpios = <&gpio0 6 GPIO_ACTIVE_HIGH>; };
+	};
+};

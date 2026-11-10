@@ -492,7 +492,27 @@ portion that survives. The command itself continues for about 400 ms.
   paired AD2 captures. The firmware commit and the workload still need to be
   confirmed (OI-007).
 
-### 3.7 Future-week evidence rule
+### 3.7 Week 6 — Schedulability, response time and priority inversion
+
+#### Predictions (stated before the lab)
+
+Predicted values were derived from the task parameters and earlier
+measurements before running the Week-6 experiments. Measured values are filled
+in as each task is completed.
+
+| Measurement | Prediction | Basis of the prediction | Observed value | Reference |
+|---|---|---|---:|---|
+| Fig. 4.13 under RM: who misses, when? | τ2 misses at t = 7 ms | RTA: `R2 = 4 + ⌈R2/5⌉·2` converges to 8 ms > `D2` = 7 ms | ____ | Book: τ2 at t = 7 ms |
+| Fig. 4.13 under EDF: misses in 60 s | 0 | `U = 2/5 + 4/7 ≈ 0.971 ≤ 1` | ____ | Book: none |
+| Control's max R, no lock contention | ≈ 12 µs | Hand-off 11.7 µs (EV-W04-COST-002) + `C_obs,max` 0.7 µs (EV-W02-TASKS-006) | ____ | RTA script |
+| Control's max R during the inversion (`k_sem` as lock) | Unbounded by the analysis; grows with all medium-priority telemetry work | Medium thread preempts the lock holder | ____ | — |
+| Control's max R with a `k_mutex` | ≈ `C + B + interference` | Priority inheritance bounds blocking to one critical section | ____ | ≤ C + B + interference |
+| B: the low thread's longest critical section | ____ | To be measured by its GPIO pulse | ____ | GPIO pulse |
+| `calib` CPU / duration, before the fix | ≈ 400 ms / 400 ms | 1000 × `k_busy_wait(400)`: spinning, so CPU = duration | ____ | CPU = duration |
+| `calib` CPU / duration, after the fix | A few ms / ≈ 500 ms | `k_usleep(400)` rounds up to the 100 µs tick; CPU is only the reads | ____ | — |
+| E-stop, detection → valve low, max of 5 trips, before / after | ≈ 11 ms / < 1 ms | Before: up to one control period (10 ms) + one PWM step (1 ms). After: valve driven low in the same sampling job | ____ | Sum of the path in Task C |
+
+### 3.8 Future-week evidence rule
 
 Each new measurement record must state:
 
