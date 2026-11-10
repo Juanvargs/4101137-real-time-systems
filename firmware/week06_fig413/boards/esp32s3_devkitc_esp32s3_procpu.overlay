@@ -1,0 +1,7 @@
+/ {
+	instr {
+		compatible = "gpio-leds";
+		tau1_instr: tau1_instr { gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>; };
+		tau2_instr: tau2_instr { gpios = <&gpio0 5 GPIO_ACTIVE_HIGH>; };
+	};
+};

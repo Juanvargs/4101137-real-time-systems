@@ -9,13 +9,14 @@
 | Course | Real-Time Systems — UNAL 4101137 |
 | Team | Individual — Juan Pablo Vargas Cordoba |
 | Authors | Juan Pablo Vargas Cordoba |
-| Status | Draft — Week 4 kernel A/B and stack evidence recorded |
-| Version | 0.6 |
-| Date | 2026-10-27 |
-| Repository baseline | Week 4 complete kernel migration; evidence commit pending |
+| Status | Draft — Weeks 1–5 recorded; formal timing and safety verification pending |
+| Version | 0.7 |
+| Date | 2026-11-06 |
+| Repository baseline | Measurements span several firmware configurations; see each evidence record for its baseline |
 | Starter board | NUCLEO-G474RE — student-owned; course baseline differs |
 | Board/debug identifier | STLINK-V3 `003400303232510139353236` |
 | Week 3 comparison MCU | ESP32-C6 DevKitC compatible, 4 MB flash |
+| AI use | 2026-11-06: Codex (GPT-6) reorganized this report; no measurements were generated. Earlier per-week use remains to be documented |
 
 ### Revision history
 
@@ -27,17 +28,42 @@
 | 0.4 | 2026-10-10 | Juan Pablo Vargas Cordoba | Added observed widths for control, console, telemetry, and flow batch |
 | 0.5 | 2026-10-15 | Juan Pablo Vargas Cordoba | Added ESP32-C6 superloop versus sampling-thread timing evidence |
 | 0.6 | 2026-10-27 | Juan Pablo Vargas Cordoba | Added complete kernel A/B, visible hand-off cost, stack high-water marks, and ADR-001 |
+| 0.7 | 2026-11-06 | Juan Pablo Vargas Cordoba; Codex editing assistance | Reorganized the reading path, reconciled Week-5 references and current evidence, and clarified pending analysis without changing measurements |
 
 ## Purpose and evidence rule
 
-This living report demonstrates that the system satisfies its timing requirements.
-The required argument is:
+This living report tests the system against its timing requirements. It records
+both improvements and failures; the strict hard deadlines are not yet demonstrated.
+Read each result through the same chain:
 
 `requirement -> task -> analysis -> measured evidence -> verdict`
 
 Every timing claim shall cite an evidence ID. A result without its platform,
 firmware revision, configuration, load, instrument, and observation interval is not
 accepted as timing evidence.
+
+### Reading map
+
+| Stage | Platform | Main observation | What it establishes | Where |
+|---|---|---|---|---|
+| Week 1 | NUCLEO-G474RE | Build, flash, LED and serial console worked | Reproducible hardware starting point | §3.2; EV-W01-ENV-001, EV-W01-BUILD-002, EV-W01-HW-003, EV-W01-SERIAL-004 |
+| Week 2 | NUCLEO-G474RE superloop | Sampling maximum period 6.845 ms at baseline and 414.06 ms during `calib` | The 1 ms sampling requirement failed under the measured workloads | §3.3; EV-W02-BASELINE-002, EV-W02-BLOCK-005 |
+| Week 3 | ESP32-C6 superloop and sampling thread | `calib` sampling jitter fell from 402.47 ms to 2 µs; control still reached 412.31 ms | Moving sampling to a higher-priority thread protected sampling but not control | §3.4; EV-W03-THREAD-004 |
+| Week 4 | ESP32-C6 full kernel | Sampling maximum period 1.0056 ms and control maximum period 10.003 ms during `calib` | Large mitigation; both strict nominal periods were still exceeded in observation | §3.5; EV-W04-AB-001 |
+| Week 5 | ESP32-S3 tracing | Maximum absolute sampling jitter: 12.7 µs with tracing, 2.3 µs without | The difference between the observed maxima was 10.4 µs in this S3 comparison | §3.6; EV-W05-JITTER-ON-001, EV-W05-JITTER-OFF-001 |
+
+The Week-3/4 C6 results and Week-5 S3 results use different boards and
+instrumentation. Their raw numbers should not be treated as a same-board A/B test.
+Sections 1–2 define the requirements and design, §3 supplies evidence, §4 checks
+what can be concluded analytically, §5 records the safety work still required,
+and §6 reserves the final-project agent-built component record.
+
+### AI-use record
+
+| Period | Tool/model | Contribution | Measurement impact |
+|---|---|---|---|
+| Weeks 1–5 | Not documented in this RET | Per-week disclosure remains open | No claim made |
+| 2026-11-06, document revision 0.7 | OpenAI Codex (GPT-6) | Reorganized and cross-checked the existing report | No new measurement or timing verdict produced |
 
 ## 1. The system and its task set
 
@@ -65,7 +91,7 @@ successful runs.
 |---|---|---|---|---|
 | REQ-CTRL-01 | While the system is irrigating, the control loop shall be released every 10 ms and shall complete no later than its next release. | Hard | Kernel mitigation observed; strict deadline not demonstrated | GPIO + logic analyzer; RTA |
 | REQ-CTRL-02 | When measured pressure exceeds the safety threshold, the system shall command the valve/pump to its safe state within 5 ms. | Hard | Draft | Instrumented input-to-output latency |
-| REQ-CTRL-03 | While control is enabled, the system shall sample the pressure input every 1 ms and shall complete each sampling job before its next release. | Hard | Kernel mitigation observed; strict deadline still missed by 5.6 µs under `calib` | GPIO + logic analyzer |
+| REQ-CTRL-03 | While control is enabled, the system shall sample the pressure input every 1 ms and shall complete each sampling job before its next release. | Hard | Kernel mitigation observed; maximum measured release period exceeded 1 ms by 5.6 µs under `calib`; completion deadline not separately bounded | GPIO + logic analyzer |
 | REQ-CTRL-04 | While the control node is operational, the system shall publish telemetry of its current state at least once every 1000 ms. | Soft | Observed; detailed deadline analysis pending | GPIO + logic analyzer |
 | REQ-CTRL-05 | When a valid console command is received, the system shall produce a usable response within `TBD`; a response after that limit may be discarded. | Firm | Incomplete | UART timestamps + trace |
 | REQ-CTRL-06 | While a firm console command is executing, the system shall continue to satisfy all hard sampling deadlines. | Hard | Superloop FAIL; kernel reduces interference to 6.2 µs observed jitter, but strict hard deadline remains unproven | GPIO + logic analyzer + serial status |
@@ -76,7 +102,7 @@ successful runs.
 under a declared protocol. A future maximum observed value will be reported as
 `C_obs,max`; it shall not be called WCET without a justified upper-bound method.
 
-| Task | Requirement | Type | Activation/period | Deadline | Measured `C_i` | Jitter bound | Priority/policy | Measurement method |
+| Task | Requirement | Type | Activation/period | Deadline | Observed execution time | Observed jitter / period | Priority/policy | Measurement method |
 |---|---|---|---:|---:|---:|---:|---|---|
 | Sensor sampling | REQ-CTRL-03 | Hard | Periodic, 1 ms (1 kHz) | 1 ms | NUCLEO: `C_obs,max` 3 µs baseline; 4 µs cache-off; 12 µs during `calib`. C6: `C_obs,max` 2.7 µs in Week 3. | C6 full kernel: 6 µs idle, 6.2 µs with `calib` observed max | `sampling_tid`, preemptive prio. 2 | GPIO + analyzer |
 | Control loop | REQ-CTRL-01 | Hard | Periodic, 10 ms | 10 ms | `C_obs,max` 0.7 µs (300 NUCLEO runs, 10 MHz capture) | C6 full kernel period with `calib`: 10.003 ms observed max | `control_tid`, preemptive prio. 3 | GPIO + analyzer |
@@ -86,17 +112,17 @@ under a declared protocol. A future maximum observed value will be reported as
 | Flow batch | N/A | N/A | Every 100 flow pulses | TBD | `C_obs,max` 44 us (30 batches at 100 Hz stimulus) | N/A | private `flow_wq`, preemptive prio. 5 | DIO4 trace |
 | Display HMI | N/A | Soft | Periodic, 500 ms when enabled | TBD | Not enabled on this run | N/A | `display_tid`, preemptive prio. 7 | DIO5 trace |
 
-No unmeasured execution time, telemetry period, console deadline, sensor deadline,
-or jitter bound has been invented; each unresolved value remains explicit until the
-course provides it or the team measures and justifies it.
+Observed execution maxima and period deviations are not WCET or jitter bounds.
+Unknown response times, blocking terms and deadlines remain explicit until they
+are measured, bounded or specified by the course.
 
-### 1.4 Initial traceability matrix
+### 1.4 Requirement-to-evidence matrix
 
 | Requirement | Implementing task | Analysis | Evidence | Verdict |
 |---|---|---|---|---|
-| REQ-CTRL-01 | Control loop | Utilization + RTA | EV-W02-TASKS-006 records observed width; EV-W04-AB-001 observes 10.003 ms maximum period during `calib` | FAIL strict; analytical proof pending |
+| REQ-CTRL-01 | Control loop | Utilization + RTA | EV-W02-TASKS-006 records observed width; EV-W04-AB-001 observes 10.003 ms maximum period during `calib` | Observed 10 ms release-period target missed; completion response bound and analytical proof pending |
 | REQ-CTRL-02 | Overpressure emergency stop | Input-to-output response bound | Pending measurement | PENDING |
-| REQ-CTRL-03 | Sensor sampling | Period/jitter analysis | EV-W02-BASELINE-002, EV-W02-CACHE-004, EV-W02-BLOCK-005, EV-W03-BASELINE-002, EV-W03-THREAD-004, EV-W04-AB-001 | FAIL strict; strong kernel mitigation observed |
+| REQ-CTRL-03 | Sensor sampling | Period/jitter analysis | EV-W02-BASELINE-002, EV-W02-CACHE-004, EV-W02-BLOCK-005, EV-W03-BASELINE-002, EV-W03-THREAD-004, EV-W04-AB-001; S3 tracing comparison: EV-W05-JITTER-ON-001 and EV-W05-JITTER-OFF-001 | Observed 1 ms release-period target missed in measured C6 runs; completion response bound pending. S3 tracing result is a separate platform comparison |
 | REQ-CTRL-04 | Telemetry | Period characterization | EV-W02-TASKS-006 observed 30 publications in 30 s; period statistic pending | INCONCLUSIVE |
 | REQ-CTRL-05 | Command console | Response-time characterization | EV-W02-TASKS-006 (`status`) and EV-W02-BLOCK-005; deadline is TBD | INCONCLUSIVE |
 | REQ-CTRL-06 | Console versus hard sampling | Non-interference trace | EV-W02-BLOCK-005, EV-W03-CALIB-003, EV-W03-THREAD-004, EV-W04-AB-001 | FAIL strict; sampling interference strongly reduced |
@@ -178,13 +204,14 @@ exist.
 | EV-W05-CPU-001 | Week 5 | Normal-operation per-thread CPU share, including idle and tracer | N/A | ESP32-S3 DevKitC | `idle` 97.99 %; `tracing_thread` 0.79 %; shares normalized from analyzer cycle counts | CHARACTERIZED; cumulative since boot | `evidence/week05/EV-W05-CPU-001.md` |
 | EV-W05-PREEMPT-002 | Week 5 | CTF event sequence during `calib` | N/A | ESP32-S3 DevKitC | Console → sampling observed switch interval 4.837 µs; ISR-to-sampling start 20.012 µs; `lat_peak_us` 30 µs | CHARACTERIZED; CTF overhead applies | `evidence/week05/EV-W05-PREEMPT-002.md` |
 | EV-W05-CONTROL-003 | Week 5 | Tenth-sample control semaphore release | N/A | ESP32-S3 DevKitC | `semaphore_give` 12.171 ms; `control_tid` switched in 12.195 ms | CHARACTERIZED | `evidence/week05/EV-W05-CONTROL-003.png` |
-| EV-W05-JITTER-ON-001 | Week 5 | Sampling period with tracing enabled | REQ-CTRL-01 | ESP32-S3 DevKitC | Mean 0.99999 ms; min 0.98730 ms; max 1.0065 ms; max absolute deviation 12.7 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-ON-001.png` |
-| EV-W05-JITTER-OFF-001 | Week 5 | Sampling period with tracing disabled | REQ-CTRL-01 | ESP32-S3 DevKitC | Mean 1.00000 ms; min 0.99770 ms; max 1.0021 ms; max absolute deviation 2.3 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-OFF-001.png` |
+| EV-W05-JITTER-ON-001 | Week 5 | Sampling period with tracing enabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 0.99999 ms; min 0.98730 ms; max 1.0065 ms; max absolute deviation 12.7 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-ON-001.png` |
+| EV-W05-JITTER-OFF-001 | Week 5 | Sampling period with tracing disabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 1.00000 ms; min 0.99770 ms; max 1.0021 ms; max absolute deviation 2.3 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-OFF-001.png` |
 
 ### 3.2 Week 1 — environment and reproducibility
 
-The no-hardware prerequisite is satisfied by EV-W01-ENV-001. The following items
-remain open before week 1 is complete:
+The no-hardware prerequisite is satisfied by EV-W01-ENV-001. The table below
+records the Week-1 checks; the separate course-baseline board question remains
+open as OI-001 in Appendix B.
 
 | Check | Status | Evidence |
 |---|---|---|
@@ -194,7 +221,7 @@ remain open before week 1 is complete:
 | ARM toolchain for the starter board is installed | PASS | EV-W01-ENV-001 |
 | Xtensa toolchain for ESP32-S3 is installed | PASS | EV-W01-ENV-001 |
 | User belongs to the serial-access group (`dialout`) | PASS | EV-W01-ENV-001 |
-| VS Code or the selected editor is available | PENDING | `code` not found; alternative editor not yet declared |
+| VS Code or the selected editor is available | PASS | GNU nano 7.2 is the declared alternative (OI-005); `code` was not found |
 | Starter-board target confirmed | PASS | NUCLEO-G474RE; Zephyr target `nucleo_g474re` |
 | `blinky` builds for the physical board | PASS | EV-W01-BUILD-002 |
 | `blinky` is flashed and LD2 blinks | PASS | EV-W01-HW-003 |
@@ -335,10 +362,11 @@ in the course.
 
 #### Week 3 verdict
 
-Task C successfully demonstrates that the kernel thread protects sampling from
-the long console computation. It does **not** prove the hard sampling
-requirement: 1.0020 ms is 2 us later than a strict 1 ms deadline. It also does
-not protect control, which still belongs to the blocked main loop. The separate
+Task C demonstrates that the kernel thread protects sampling from the long
+console computation. It does **not** prove the hard sampling requirement: the
+1.0020 ms maximum observed period exceeds the nominal 1 ms release interval
+by 2 µs, and job completion was not separately bounded. It also does not
+protect control, which still belongs to the blocked main loop. The separate
 C6 pulse-width capture records `C_obs,max = 2.7 us`; that observed execution
 width must not be confused with the 11 us release-to-thread-start latency.
 
@@ -365,10 +393,11 @@ the C6 Week-3 comparison. The idle capture used 30 M samples at 1 MHz for 30 s;
 the `calib` capture used 30 M samples at 5 MHz for 6 s. See EV-W04-AB-001 for
 the raw screenshots, min/max values and reproducible commands.
 
-The full migration is an architectural success compared with the superloop,
-but it remains an observed result: sampling's 1.0056 ms maximum under `calib`
-is 5.6 µs late against a strict 1 ms deadline, and control's 10.003 ms maximum
-is 3 µs late against 10 ms. Neither result is a WCET bound.
+The full migration is an architectural improvement compared with the superloop,
+but it remains an observed result: sampling's 1.0056 ms maximum period under
+`calib` exceeds the nominal 1 ms release interval by 5.6 µs, and control's
+10.003 ms maximum period exceeds 10 ms by 3 µs. These period measurements do
+not separately bound job completion time, and neither is a WCET bound.
 
 #### Cost and stack result
 
@@ -462,15 +491,19 @@ Each new measurement record must state:
 ### 4.1 Input data
 
 All `C_i` inputs shall cite measured evidence and the configuration under which
-they were obtained.
+they were obtained. The observations below come from different boards and
+implementations. They are **observed execution maxima**, not WCET bounds, and
+cannot be combined into one formal schedulability test without a consistent
+platform, load and blocking model.
 
-| Task | `C_i` evidence | `C_i` used | `T_i` | `D_i` | `B_i` | Notes |
-|---|---|---:|---:|---:|---:|---|
-| Sampling + safety check | EV-W02-BASELINE-002 | `C_obs,max` 3 us (cache-on baseline) | 1 ms | 1 ms | 0 (no mutexes) | Measured period still fails due to loop interference |
-| Control loop | TBD | TBD | 10 ms | 10 ms | TBD | Pending week 2 |
-| Command console | TBD | TBD | Sporadic | TBD | TBD | Pending week 2 |
-| Telemetry | TBD | TBD | 1 s | TBD | TBD | Period provisional |
-| Display HMI | TBD | TBD | 500 ms | TBD | TBD | Optional task |
+| Task | Available execution evidence | `C_i` for formal analysis | `T_i` | `D_i` | `B_i` / limitation |
+|---|---|---|---:|---:|---|
+| Sampling + safety check | NUCLEO cache-on `C_obs,max` 3 µs (EV-W02-BASELINE-002); C6 Week-3 threaded `C_obs,max` 2.7 µs (EV-W03-CI-008) | TBD for the chosen full-kernel configuration | 1 ms | 1 ms | NUCLEO superloop had no mutexes; full-kernel blocking remains to be analyzed. The measured period failed in some runs |
+| Control loop | NUCLEO `C_obs,max` 0.7 µs across 300 runs (EV-W02-TASKS-006) | TBD for the chosen full-kernel configuration | 10 ms | 10 ms | Blocking model TBD; C6 control period reached 10.003 ms during `calib` |
+| Command console | NUCLEO `status` path max 6.6010 ms across eight received bytes (EV-W02-TASKS-006); synchronous `calib` blocked the superloop for about 414 ms (EV-W02-BLOCK-005) | TBD; the `status` statistic is not a generic console WCET | Sporadic | TBD | Firm response deadline and worst-case interference model TBD |
+| Telemetry | NUCLEO `C_obs,max` 5.7770 ms across 30 runs (EV-W02-TASKS-006) | TBD for the chosen full-kernel configuration | 1 s | 1 s, from REQ-CTRL-04 | Period and width were observed; analytical bound TBD |
+| Flow batch | NUCLEO `C_obs,max` 44 µs across 30 batches (EV-W02-TASKS-006) | TBD if included in formal analysis | Every 100 flow pulses | TBD | Event-driven workload; no deadline allocated |
+| Display HMI | Not enabled in the recorded run | TBD | 500 ms when enabled | TBD | Optional task; execution and blocking unmeasured |
 
 ### 4.2 Tests and results
 
@@ -488,8 +521,8 @@ they were obtained.
 
 | Task | `R_i` | `D_i` | Margin `D_i - R_i` | Analytical verdict | Measured verdict |
 |---|---:|---:|---:|---|---|
-| Sampling + safety check | Not yet bounded analytically | 1 ms | TBD | PENDING | FAIL strict — C6 full kernel maximum 1.0056 ms during `calib`; major mitigation versus 403.47 ms superloop |
-| Control loop | TBD | 10 ms | TBD | PENDING | FAIL strict — C6 full kernel maximum 10.003 ms during `calib`; major mitigation versus 412.47 ms superloop |
+| Sampling + safety check | Not yet bounded analytically | 1 ms | TBD | PENDING | Observed 1 ms release-period target missed: C6 full kernel maximum 1.0056 ms during `calib`; completion deadline remains unbounded; major mitigation versus 403.47 ms superloop |
+| Control loop | Not yet bounded analytically | 10 ms | TBD | PENDING | Observed 10 ms release-period target missed: C6 full kernel maximum 10.003 ms during `calib`; completion deadline remains unbounded; major mitigation versus 412.47 ms superloop |
 
 ## 5. Functional safety
 
@@ -508,6 +541,18 @@ they were obtained.
 | Who/what bites | TBD | Pending project design |
 | Physical action on bite | Valve closes; implementation TBD | Pending checkpoint 2 |
 | Measured fail-safe time | TBD | Pending checkpoint 2 |
+
+## 6. Agent-built components (final project)
+
+The template reserves this section for SoilSense Hub's GUI and routing against
+`spec/hub-soft.md`. No implementation or verification of those components is
+claimed in the evidence through Week 5. When the work is performed, record the
+tool and model, session-log path, each linked requirement, the measurement and
+any deviation from the spec before assigning a verdict.
+
+| Requirement | Spec item | Measurement method | Measured result | Verdict |
+|---|---|---|---|---|
+| Pending final-project requirements | Pending | Pending | Pending | PENDING |
 
 ## Appendix A — Evidence naming and verdicts
 
