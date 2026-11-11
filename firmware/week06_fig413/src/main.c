@@ -40,6 +40,39 @@ static struct periodic_task tau2 = {
 static int64_t epoch_ms;
 static uint32_t epoch_cycles;
 
+/* Calibrated CPU-time computation: k_busy_wait() counts wall-clock time,
+ * which keeps running while the thread is preempted. */
+static uint32_t iters_per_100us;
+
+static __noinline void spin(uint32_t iters)
+{
+	for (volatile uint32_t i = 0; i < iters; i++) {
+	}
+}
+
+static void compute_us(uint32_t us)
+{
+	spin((uint32_t)(((uint64_t)iters_per_100us * us) / 100U));
+}
+
+static void calibrate(void)
+{
+	const uint32_t n = 200000;
+	uint64_t best_ns = UINT64_MAX;
+
+	for (int trial = 0; trial < 5; trial++) {
+		uint32_t c0 = k_cycle_get_32();
+
+		spin(n);
+		uint64_t ns = k_cyc_to_ns_floor64(k_cycle_get_32() - c0);
+
+		if (ns < best_ns) {
+			best_ns = ns;
+		}
+	}
+	iters_per_100us = (uint32_t)(((uint64_t)n * 100000U) / best_ns);
+}
+
 #ifdef CONFIG_SCHED_DEADLINE
 /* EDF compares deadlines only among threads with equal static priority. */
 #define TAU1_PRIORITY 3
@@ -65,7 +98,7 @@ static void periodic_task(void *p1, void *p2, void *p3)
 		k_sleep(K_TIMEOUT_ABS_MS(release_ms));
 
 		gpio_pin_set_dt(task->pin, 1);
-		k_busy_wait(task->execution_us);
+	        compute_us(task->execution_us);
 		gpio_pin_set_dt(task->pin, 0);
 
 		uint32_t job_deadline = release_cycles + period_cycles;
@@ -100,6 +133,8 @@ int main(void)
 
 	gpio_pin_configure_dt(&tau1_pin, GPIO_OUTPUT_INACTIVE);
 	gpio_pin_configure_dt(&tau2_pin, GPIO_OUTPUT_INACTIVE);
+	calibrate();
+	printk("calibration: %u iterations per 100 us\n", iters_per_100us);
 
 #ifdef CONFIG_SCHED_DEADLINE
 	printk("Fig. 4.13 mode: EDF; tau1/tau2 static priority=%d\n",

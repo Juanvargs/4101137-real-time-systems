@@ -1,0 +1,10 @@
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+	week06_instr {
+		compatible = "gpio-leds";
+		low_instr: low_instr { gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>; };
+		control_instr: control_instr { gpios = <&gpio0 5 GPIO_ACTIVE_HIGH>; };
+		medium_instr: medium_instr { gpios = <&gpio0 6 GPIO_ACTIVE_HIGH>; };
+	};
+};

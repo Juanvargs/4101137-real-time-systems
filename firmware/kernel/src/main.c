@@ -267,8 +267,11 @@ static void task_sampling(void)
 
 	/* e-stop condition is *detected* here, at 1 kHz... */
 	if (pressure_mv > ESTOP_MV) {
-		estop = true; /* ...but the valve only reacts when control runs */
+		estop = true;
+		duty_pct = 0; /* shut the valve in the detecting sampling job */
 	}
+	/* Week 6 Task C: mark the instant sampling detects the e-stop. */
+	instr_set(&instr_flow, estop);
 
 	/* joystick, decimated to 50 Hz */
 	if (++joy_div >= 20) {
@@ -416,7 +419,7 @@ static void cmd_calib(void)
 	printk("calibrating zero-flow offset (%d rounds)...\n", CALIB_ROUNDS);
 	for (int i = 0; i < CALIB_ROUNDS; i++) {
 		(void)read_pressure_mv();
-		k_busy_wait(400); /* sensor settling time between reads */
+		k_usleep(400); /* sensor settling time; yield CPU between reads */
 	}
 	printk("calibration done\n");
 }

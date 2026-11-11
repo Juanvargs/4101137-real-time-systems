@@ -1,0 +1,21 @@
+From: Week 6 lab workaround
+Subject: [PATCH] bootloader: recognize XMC MFID 0x70 for XM25QH128AHIG
+
+The ESP32-S3 reports flash ID 0x207018 (vendor 0x20, MFID 0x70,
+CPID 0x18). The bundled HAL's strict XMC check accepts MFID 0x41
+for CPID 0x17..0x20 but omits 0x70, causing hw_init to reboot before
+Zephyr starts. Include 0x70 in that same CPID range.
+
+This patch changes the external Zephyr module at:
+modules/hal/espressif/zephyr/port/bootloader/bootloader_flash.c
+
+It is kept here so the local toolchain workaround is documented and repeatable.
+
+--- a/zephyr/port/bootloader/bootloader_flash.c
++++ b/zephyr/port/bootloader/bootloader_flash.c
+@@ -707 +707 @@
+-    } else if (mfid == 0x41) {
++    } else if (mfid == 0x41 || mfid == 0x70) {
+        if (cpid >= 0x17 && cpid <= 0x20) {
+            matched = true;
+        }

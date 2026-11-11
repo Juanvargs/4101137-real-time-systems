@@ -90,7 +90,7 @@ successful runs.
 | ID | Requirement (EARS style) | Type | Status | Planned verification |
 |---|---|---|---|---|
 | REQ-CTRL-01 | While the system is irrigating, the control loop shall be released every 10 ms and shall complete no later than its next release. | Hard | Kernel mitigation observed; strict deadline not demonstrated | GPIO + logic analyzer; RTA |
-| REQ-CTRL-02 | When measured pressure exceeds the safety threshold, the system shall command the valve/pump to its safe state within 5 ms. | Hard | Draft | Instrumented input-to-output latency |
+| REQ-CTRL-02 | When measured pressure exceeds the safety threshold, the system shall command the valve/pump to its safe state within 5 ms. | Hard | ESP32-S3 prototype meets the measured post-fix trip; full safe-state hardware path remains unverified | Instrumented detection-to-valve latency |
 | REQ-CTRL-03 | While control is enabled, the system shall sample the pressure input every 1 ms and shall complete each sampling job before its next release. | Hard | Kernel mitigation observed; maximum measured release period exceeded 1 ms by 5.6 µs under `calib`; completion deadline not separately bounded | GPIO + logic analyzer |
 | REQ-CTRL-04 | While the control node is operational, the system shall publish telemetry of its current state at least once every 1000 ms. | Soft | Observed; detailed deadline analysis pending | GPIO + logic analyzer |
 | REQ-CTRL-05 | When a valid console command is received, the system shall produce a usable response within `TBD`; a response after that limit may be discarded. | Firm | Incomplete | UART timestamps + trace |
@@ -121,7 +121,7 @@ are measured, bounded or specified by the course.
 | Requirement | Implementing task | Analysis | Evidence | Verdict |
 |---|---|---|---|---|
 | REQ-CTRL-01 | Control loop | Utilization + RTA | EV-W02-TASKS-006 records observed width; EV-W04-AB-001 observes 10.003 ms maximum period during `calib` | Observed 10 ms release-period target missed; completion response bound and analytical proof pending |
-| REQ-CTRL-02 | Overpressure emergency stop | Input-to-output response bound | Pending measurement | PENDING |
+| REQ-CTRL-02 | Overpressure emergency stop | Instrumented detection-to-valve latency, before/after ADR-005 | EV-W06-ESTOP-CALIB-BEFORE-001: before max 10.080 ms; after 0.2561 µs in one trip | Prototype PASS after fix; five-trip post-fix maximum not characterized |
 | REQ-CTRL-03 | Sensor sampling | Period/jitter analysis | EV-W02-BASELINE-002, EV-W02-CACHE-004, EV-W02-BLOCK-005, EV-W03-BASELINE-002, EV-W03-THREAD-004, EV-W04-AB-001; S3 tracing comparison: EV-W05-JITTER-ON-001 and EV-W05-JITTER-OFF-001 | Observed 1 ms release-period target missed in measured C6 runs; completion response bound pending. S3 tracing result is a separate platform comparison |
 | REQ-CTRL-04 | Telemetry | Period characterization | EV-W02-TASKS-006 observed 30 publications in 30 s; period statistic pending | INCONCLUSIVE |
 | REQ-CTRL-05 | Command console | Response-time characterization | EV-W02-TASKS-006 (`status`) and EV-W02-BLOCK-005; deadline is TBD | INCONCLUSIVE |
@@ -164,8 +164,22 @@ exist.
 
 ### ADR-002 — Mutual-exclusion policy
 
-- **Status:** Not started; decision due in week 7.
-- **Decision:** TBD after measuring blocking and priority inversion.
+- **Status:** Accepted for shared locks in Week 6; formal production WCET remains pending.
+- **Context:** A low-priority owner can block the high-priority control thread. With a binary semaphore, medium-priority work preempts the owner and extends that inversion.
+- **Alternatives:** no shared lock; a binary semaphore; a Zephyr `k_mutex` with priority inheritance.
+- **Decision:** Use `k_mutex` whenever a high-priority task can wait on a lock held by a lower-priority task. Do not use a plain binary semaphore as a mutex.
+- **Quantitative evidence:** control response was 0.93830 ms without contention, 50.466 ms with the semaphore, and 27.001 ms with PI. The mutex low-thread critical-section pulse measured `B=28.148 ms`; measured `C_control=0.93830 ms`, so the simple `C+B` envelope is 29.08630 ms and contains the observed mutex response. The 51.604 ms semaphore lock-held pulse includes medium-thread interference and is not a protocol-level bound. Both contention cases still exceed the experiment's 10 ms control deadline.
+- **Consequences:** PI bounds the priority inversion to the owner's remaining critical section under the mutex protocol, but it does not make a 28 ms critical section acceptable for a 10 ms deadline. Reduce the critical section before product use.
+
+### ADR-005 — E-stop and `calib` at the source
+
+- **Status:** Accepted experimentally on the ESP32-S3 prototype; full hardware safe-state path and repeated post-fix maximum remain to be verified.
+- **Context:** Before the fix, the sampling thread detected overpressure but the valve duty was not cleared until the next control release. Across five trips, detection-to-valve-low reached 10.080 ms, missing the 5 ms requirement. `calib` used 1000 active waits of 400 µs, requesting about 400 ms of CPU.
+- **Alternatives:** retain control-thread valve shutdown and active calibration waits; yield during sensor settling and close the valve directly from the detecting sampling job.
+- **Decision:** Replace each `k_busy_wait(400)` with `k_usleep(400)`, and set `duty_pct=0` in the sampling e-stop branch before the same job's PWM write. Preserve `instr_flow` as the detection marker.
+- **Quantitative evidence:** pre-fix calibration wall duration was 400.8 ms; after, 499.4 ms. Console runtime increased 27,746,110 cycles across the post-calibration interval, ≈115.6 ms at 240 MHz, including UART and analyzer-command overhead. This is substantially below the ≈400 ms active-wait CPU request. E-stop maximum was 10.080 ms before and 0.2561 µs in the one measured post-fix trip.
+- **Timing analysis:** `k_usleep(400)` yields CPU but resumes on tick/scheduler boundaries; 1000 waits measured about 499.4 ms wall time, not 400 ms CPU. If a 1 s period is configured, the current task set's `U=97.14%` leaves 28.6 ms/s for lower-priority work, so no claim is made that `calib` fits within one second under that load. A 1 kHz tick could round each 400 µs sleep to 1 ms, consuming about one second of wall time before loop overhead.
+- **Consequences:** the measured e-stop path now closes the prototype valve in the detecting sampling job. The remaining system-level `C_i`, hardware shutdown path, and five-trip post-fix maximum are not yet established.
 
 ### ADR-003 — Core allocation for the hard loop
 
@@ -206,6 +220,13 @@ exist.
 | EV-W05-CONTROL-003 | Week 5 | Tenth-sample control semaphore release | N/A | ESP32-S3 DevKitC | `semaphore_give` 12.171 ms; `control_tid` switched in 12.195 ms | CHARACTERIZED | `evidence/week05/EV-W05-CONTROL-003.png` |
 | EV-W05-JITTER-ON-001 | Week 5 | Sampling period with tracing enabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 0.99999 ms; min 0.98730 ms; max 1.0065 ms; max absolute deviation 12.7 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-ON-001.png` |
 | EV-W05-JITTER-OFF-001 | Week 5 | Sampling period with tracing disabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 1.00000 ms; min 0.99770 ms; max 1.0021 ms; max absolute deviation 2.3 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-OFF-001.png` |
+| EV-W06-RM-001 | Week 6 | Reproduce Fig. 4.13 under RM | N/A | ESP32-S3 DevKitC | `tau1_misses=0`, `tau2_misses=3429` in 60 s; DIO1 width max 6.0099 ms | FAIL for `τ2` | `evidence/week06/EV-W06-RM-001.md` |
+| EV-W06-EDF-001 | Week 6 | Reproduce Fig. 4.13 under EDF | N/A | ESP32-S3 DevKitC | `tau1_misses=0`, `tau2_misses=0` in 60 s | PASS for modeled task set | `evidence/week06/EV-W06-EDF-001.md` |
+| EV-W06-INV-BASELINE-001 | Week 6 | Control response without lock contention | N/A | ESP32-S3 DevKitC | 0.93830 ms | CHARACTERIZED | `evidence/week06/EV-W06-INV-BASELINE-001.md` |
+| EV-W06-INV-SEMAPHORE-001 | Week 6 | Reproduce priority inversion with binary semaphore | N/A | ESP32-S3 DevKitC | Control 50.466 ms; low lock-held 51.604 ms; medium 23.444 ms | FAIL for 10 ms control deadline | `evidence/week06/EV-W06-INV-SEMAPHORE-001.md` |
+| EV-W06-INV-MUTEX-001 | Week 6 | Repeat with priority inheritance | N/A | ESP32-S3 DevKitC | Control 27.001 ms; measured `B=28.148 ms` | Inversion reduced; 10 ms deadline still fails | `evidence/week06/EV-W06-INV-MUTEX-001.md` |
+| EV-W06-ESTOP-CALIB-BEFORE-001 | Week 6 | Measure e-stop and `calib` before/after source fixes | REQ-CTRL-02 | ESP32-S3 DevKitC | E-stop 10.080 ms max before / 0.2561 µs one post-fix trip; `calib` 400.8 / 499.4 ms wall and post CPU ≈115.6 ms | Before FAIL; one post-fix trip meets 5 ms | `evidence/week06/EV-W06-ESTOP-CALIB-BEFORE-001.md`, `EV-W06-ESTOP-BEFORE-001.png`, `EV-W06-ESTOP-AFTER-001.png`, `EV-W06-CALIB-BEFORE-001.png`, `EV-W06-CALIB-AFTER-001.png` |
+| EV-W06-RTA-001 | Week 6 | Apply utilization tests and RTA to Fig. 4.13 and measured inversion cases | N/A | ESP32-S3 DevKitC | RM `R2=8 ms>D2=7 ms`; EDF `U=0.9714≤1`; measured Task B cases lie below their empirical `C+B` envelopes | RM FAIL; EDF PASS for model; contention misses 10 ms deadline | `evidence/week06/EV-W06-RTA-001.md`; `scripts/week06_rta.py` |
 
 ### 3.2 Week 1 — environment and reproducibility
 
@@ -509,12 +530,12 @@ platform, load and blocking model.
 
 | Analysis | Applicability | Result | Evidence/tool | Verdict |
 |---|---|---|---|---|
-| Utilization `U = sum(C_i/T_i)` | Periodic task subset | TBD | Pending week 6 | PENDING |
-| Liu & Layland RM bound | Fixed-priority periodic tasks | TBD | Pending week 6 | PENDING |
-| Hyperbolic test | Fixed-priority periodic tasks | TBD | Pending week 6 | PENDING |
-| EDF utilization test | Independent periodic tasks under EDF | TBD | Pending week 6 | PENDING |
-| Response-Time Analysis | Per fixed-priority task | TBD | Pending week 7 | PENDING |
-| Extended RTA with blocking | Tasks sharing mutexes | TBD | Pending week 7 | PENDING |
+| Utilization `U = sum(C_i/T_i)` | Fig. 4.13 model; full SoilSense task set remains incomplete | `U=0.971429` for Fig. 4.13 | EV-W06-RTA-001 / `scripts/week06_rta.py` | CHARACTERIZED; extra sensors pending parameters |
+| Liu & Layland RM bound | Two independent periodic tasks in Fig. 4.13 | `U=0.971429 > 0.828427`; sufficient test inconclusive | EV-W06-RTA-001 | INCONCLUSIVE by this test |
+| Hyperbolic test | Two independent periodic tasks in Fig. 4.13 | Product `2.200000 > 2`; sufficient test inconclusive | EV-W06-RTA-001 | INCONCLUSIVE by this test |
+| EDF utilization test | Fig. 4.13, implicit deadlines | `0.971429 ≤ 1`; measured 60 s with zero misses | EV-W06-RTA-001, EV-W06-EDF-001 | PASS for modeled task set |
+| Response-Time Analysis | Fig. 4.13 RM and isolated Task B | `R2=8 ms>D2=7 ms`; measured cases summarized in §4.4 | EV-W06-RTA-001 / script | RM FAIL for `τ2`; Task B misses its 10 ms deadline under contention |
+| Extended RTA with blocking | Isolated Task B lock experiment | `C+B=29.0863 ms` for mutex case; observed 27.001 ms | EV-W06-RTA-001 / script | Empirical envelope; not a WCET proof |
 | CBS bandwidth | Hub `SCHED_DEADLINE` task | TBD | Pending week 11 | PENDING |
 
 ### 4.3 Per-task verdict
@@ -523,6 +544,35 @@ platform, load and blocking model.
 |---|---:|---:|---:|---|---|
 | Sampling + safety check | Not yet bounded analytically | 1 ms | TBD | PENDING | Observed 1 ms release-period target missed: C6 full kernel maximum 1.0056 ms during `calib`; completion deadline remains unbounded; major mitigation versus 403.47 ms superloop |
 | Control loop | Not yet bounded analytically | 10 ms | TBD | PENDING | Observed 10 ms release-period target missed: C6 full kernel maximum 10.003 ms during `calib`; completion deadline remains unbounded; major mitigation versus 412.47 ms superloop |
+
+### 4.4 Week 6 schedulability and blocking cases
+
+The Week-6 analysis uses two isolated models with measured inputs. Fig. 4.13
+uses its declared execution times and periods; it is not the SoilSense sensor
+task set. Task B uses a standalone priority-inversion demonstration and is not
+combined with the full-kernel measurements in §4.1.
+
+For Fig. 4.13, `U=0.971429`. The Liu–Layland and hyperbolic sufficient tests do
+not certify RM, but their failure is not itself proof of unschedulability.
+RTA gives `R1=2 ms≤5 ms` and `R2=8 ms>7 ms`, matching the 60 s RM miss result.
+EDF passes the implicit-deadline utilization test (`U≤1`) and had zero misses
+in the 60 s run.
+
+For Task B, `C_control=0.93830 ms`. The baseline has `B=0`; measured response is
+0.93830 ms. With the PI mutex, measured `B=28.148 ms` gives an empirical
+`C+B=29.08630 ms` envelope around the 27.001 ms response. With the semaphore,
+the observed low lock-held width of 51.604 ms gives `C+B=52.54230 ms`, above
+the 50.466 ms response. The semaphore width includes medium-thread interference
+and is only an observed envelope for this experiment, not a blocking guarantee.
+Both contention measurements exceed the 10 ms control deadline; priority
+inheritance reduces inversion but this deliberately long critical section
+remains unsuitable for that deadline.
+
+Finite captures can have maxima below analytical response-time envelopes
+because they need not include the worst release phasing and blocking alignment.
+Neither a 30 s trace nor the measured maxima establish WCET. Daniela's two
+additional tasks remain unassessed until their execution times, periods, and
+deadlines are provided.
 
 ## 5. Functional safety
 
