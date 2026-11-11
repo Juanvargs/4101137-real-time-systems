@@ -59,7 +59,7 @@ CMake cache state from one application from being reused for another.
 
 ## Observed result
 
-The student-run build completed all 99 build steps successfully. Execution
+The build completed all 99 build steps successfully. Execution
 produced:
 
 ```text
