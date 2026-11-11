@@ -44,6 +44,14 @@
         {"name": "telemetry", "c_ms": null, "period_ms": 1000.0, "deadline_ms": 1000.0},
         {"name": "console", "c_ms": null, "period_ms": null, "deadline_ms": null}
       ]
+    },
+    {
+      "name": "SoilSense ESP32-S3 — measured periodic subset (C_obs, not WCET)",
+      "tasks": [
+        {"name": "sampling", "c_ms": 0.0042, "period_ms": 1.0, "deadline_ms": 1.0},
+        {"name": "control", "c_ms": 0.0004, "period_ms": 10.0, "deadline_ms": 10.0},
+        {"name": "telemetry", "c_ms": 0.064, "period_ms": 1000.0, "deadline_ms": 1000.0}
+      ]
     }
   ]
 }

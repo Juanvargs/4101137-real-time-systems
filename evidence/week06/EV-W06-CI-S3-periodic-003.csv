@@ -1,0 +1,12 @@
+#Digilent WaveForms Logic Analyzer Measurements
+#Device Name: Discovery2
+#Serial Number: SN:210321A962AA
+#Date Time: 2026-11-11 09:42:05.998
+
+,Name,Value,Count,Mean,Maximum
+DIO  0,PosWidth, 0.93787 us,3000, 0.93787 us, 4.2000 us
+DIO  1,PosWidth, 351.00 ns,300, 351.00 ns, 400.00 ns
+DIO  3,PosWidth, 63.967 us,3, 63.967 us, 64.000 us
+DIO  2,PosWidth,,0,,
+DIO  4,PosWidth,,0,,
+DIO  5,PosWidth, 24.630 ms,5, 24.630 ms, 24.641 ms

@@ -1,9 +1,10 @@
 # EV-W06-CI-S3 — Procedimiento para medir los anchos instrumentados
 
-**Estado:** ambas variantes compilan; adquisición pendiente porque esta sesión
-no detecta la ESP32-S3 ni el Digilent AD2 (`lsusb` solo mostró la webcam y el
-adaptador inalámbrico). Build normal: `/tmp/w06-ci-s3`; build con OLED:
-`/tmp/w06-ci-s3-display`.
+**Estado:** adquisición parcial en ESP32-S3 + AD2. Se capturaron los anchos de
+sampling, control, telemetry, console (`status`) y flow. La variante con display
+produjo pulsos DIO5, pero el OLED no mostró imagen; ese ancho se conserva como
+duración observada no validada y no se usa como `C_i`. Build normal:
+`/tmp/w06-ci-s3`; build con OLED: `/tmp/w06-ci-s3-display`.
 
 Para flashear cuando esté conectada la S3, desde `~/zephyrproject`:
 
@@ -40,8 +41,11 @@ No apliques 5 V a los GPIO. Para flow, configura DIO6 como salida digital de
 2. En WaveForms abre Logic, selecciona DIO0–DIO5 como entradas, `Mode: Record`,
    `Samples: 30 M` y `Rate: 10 MHz`. Cada registro cubre aproximadamente 3 s.
    Añade una medida `PosWidth` para cada canal activo y guarda el registro.
-3. Para sampling/control/telemetry, registra al menos tres ventanas. Guarda
-   máximo, media y p99 de los anchos altos, y el número de pulsos observados.
+3. Para sampling/control/telemetry, registra al menos tres ventanas. En la
+   tercera ventana se guardó el resumen WaveForms y los eventos de DIO0, DIO1
+   y DIO3 en CSV. El p99 se calculó con rango más cercano sobre los anchos
+   positivos completos. Los máximos de WaveForms se mantuvieron estables en las
+   tres ventanas; las distribuciones CSV corresponden a una ventana de 3 s.
    Un ancho durante ejecución concurrente es `C_obs` de pared: si una tarea de
    mayor prioridad la preempta, el pulso puede extenderse y no equivale por sí
    solo a CPU `C_i`.
@@ -50,27 +54,32 @@ No apliques 5 V a los GPIO. Para flow, configura DIO6 como salida digital de
    la medida. La salida UART de `status` sí forma parte de ese camino medido.
    `calib` incluye `k_usleep`, así que su ancho GPIO es duración de pared y no
    CPU `C_i`.
-5. Para flow, conéctalo a DIO6/GPIO16, emite 100 flancos ascendentes y mide DIO4.
-   El pulso DIO4 marca la ejecución del lote, no el tiempo de cada ISR.
-6. Para display, usa el OLED real y el build opcional `display.conf`; espera a
-   que el primer refresco termine y mide DIO5 durante varias actualizaciones.
-   Sin el dispositivo OLED listo no habrá pulso válido de ejecución.
-7. Conserva los PNG originales y anota para cada señal la captura, configuración,
-   ancho máximo/medio/p99, período/deadline usado y si hubo solapamiento con
-   tareas de prioridad superior. Solo después rellena `c_ms` en
-   `scripts/week06_rta_input.json`.
+5. Para flow, se conectó DIO6/GPIO16 con reloj PP de 100 Hz durante 3 s. Se
+   observaron 300 flancos de entrada y tres lotes en DIO4. El pulso DIO4 marca
+   la ejecución del lote, no el tiempo de cada ISR.
+6. Se probó el build opcional `display.conf` con OLED conectado. DIO5 mostró
+   cinco pulsos de hasta 24.641 ms, pero como la pantalla no funcionó
+   visualmente, se registra la observación como no validada y no se usa como
+   `C_i`.
+7. Los CSV de eventos y el resumen WaveForms quedan como evidencia primaria.
+   Los anchos son `C_obs` bajo la carga capturada, no WCET; solo el subconjunto
+   periódico medido se usa en un análisis RTA parcial.
 
-## Resultado pendiente
+## Resultados observados
 
 | Tarea | GPIO | `C_i`/ancho observado | Período | Deadline | Estado |
 |---|---:|---:|---:|---:|---|
-| sampling | 4 | — | 1 ms | 1 ms | Pendiente de captura S3 |
-| control | 5 | — | 10 ms | 10 ms | Pendiente de captura S3 |
-| telemetry | 7 | — | 1000 ms | 1000 ms | Pendiente de captura S3 |
-| console (`status`) | 6 | — | Esporádica | Por definir | Pendiente de captura S3 |
-| flow batch | 15 | — | 100 eventos | Por definir | Pendiente de estimular GPIO16 |
-| display refresh | 17 | — | 500 ms | Por definir | Pendiente de OLED y captura S3 |
+| sampling | 4 | n=3000; media 0.93787 µs; p99 1.000 µs; máx. 4.200 µs | 1 ms | 1 ms | Observado en una ventana CSV; máx. estable en tres ventanas |
+| control | 5 | n=300; media 351 ns; p99 400 ns; máx. 400 ns | 10 ms | 10 ms | Observado en una ventana CSV; máx. estable en tres ventanas |
+| telemetry | 7 | n=3; media 63.967 µs; p99/máx. 64.000 µs | 1000 ms | 1000 ms | Solo tres ejecuciones; resultado preliminar |
+| console (`status`) | 6 | n=8 pulsos; media 10.625 µs; p99/máx. 69.100 µs | Esporádica | Por definir | Mezcla recepción de bytes y manejador de fin de línea; no WCET |
+| flow batch | 15 | n=3; media 2.467 µs; p99/máx. 2.500 µs | 1000 ms bajo estímulo 100 Hz | Por definir | Tres lotes inducidos con 300 flancos en 3 s |
+| display refresh | 17 | n=5; media 24.630 ms; máx. 24.641 ms | 500 ms | Por definir | OLED sin imagen; duración observada no validada, excluida de `C_i` |
 
 Esta tabla distingue parámetros del nodo de los valores de Task B aislado. No
 se deben copiar `0.93830 ms` ni los bloqueos medidos en Task B como `C_i` del
-firmware de SoilSense.
+firmware de SoilSense. Archivos: `EV-W06-CI-S3-periodic-003.csv` y los eventos
+`EV-W06-CI-S3-DIO0-events.csv` hasta `EV-W06-CI-S3-DIO4-events.csv`. Los
+resultados son observaciones de una ventana de 3 s por CSV; console y flow son
+caminos activados manualmente. `display` y el conjunto completo permanecen
+pendientes de validación.

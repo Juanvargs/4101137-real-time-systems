@@ -1,0 +1,13 @@
+#Digilent WaveForms Logic Analyzer DIO  4 Events
+#Device Name: Discovery2
+#Serial Number: SN:210321A962AA
+#Date Time: 2026-11-11 09:57:16.036
+
+Time (s),Event
+-1.499999900,0
+-1.020867100,1
+-1.020864600,0
+-0.020867100,1
+-0.020864600,0
+0.979133000,1
+0.979135400,0

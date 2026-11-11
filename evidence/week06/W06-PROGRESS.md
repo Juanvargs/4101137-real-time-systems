@@ -42,7 +42,8 @@ Plataforma: ESP32-S3 DevKitC. Usar GPIO4/GPIO5 para los pulsos de Task A; GPIO21
 - [x] Comparar RTA con los resultados medidos, incluyendo bloqueo (`EV-W06-RTA-001.md`).
 - [x] Completar ADR-002 con estado/datos compartidos y ADR-005 con números corregidos y ambas sumas e-stop.
 - [x] Añadir tabla predictivo/observado de Semana 6 y lectura en §3.7; registrar por separado qué valores de Task B no son `C_i` del nodo.
-- [ ] Medir en la S3 los `C_i` de sampling, control, telemetry, console, flow y display con el firmware de instrumentación del kernel; actualizar JSON, RTA, §3 y §4. Procedimiento listo en `EV-W06-CI-S3-PROCEDURE.md`; ambos builds compilan, pero falta conectar la placa/AD2 para adquirir datos.
+- [x] Capturar en la S3 los anchos observados de sampling, control, telemetry, console (`status`) y flow; conservar los CSV de eventos, resumir media/p99/máximo y añadir un RTA parcial de las tres tareas periódicas con períodos y deadlines definidos. Ver `EV-W06-CI-S3-PROCEDURE.md` y `EV-W06-RTA-001.md`.
+- [ ] Validar `display`: el build OLED produjo pulsos DIO5 de hasta 24.641 ms, pero la pantalla no mostró imagen. No se acepta ese ancho como `C_i`; el RTA completo del nodo sigue pendiente junto con el modelo de llegada/deadline de console y flow.
 - [x] Anotar las tres capturas de Task B con las secuencias de LOW/CONTROL/MEDIUM; conservar los PNG originales y enlazar vistas SVG anotadas.
 - [x] Explicar la diferencia entre 3429 misses observados y 1714 del modelo ideal en `EV-W06-RM-001.md`; el mecanismo se presenta como hipótesis consistente con overhead medido/no aislado.
 - [x] Hacer que `scripts/week06_rta.py` lea conjuntos modificables desde JSON y permita elegir un conjunto por argumento.

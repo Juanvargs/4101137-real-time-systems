@@ -4,8 +4,10 @@
 
 Para repetir el análisis con otros parámetros, edita el JSON y ejecuta
 `python scripts/week06_rta.py --input ruta/al/conjunto.json`. Para imprimir solo
-un conjunto, agrega `--set "Fig. 4.13 — RM"`. La entrada SoilSense queda marcada
-como pendiente hasta medir `C_i`, períodos y deadlines en la S3.
+un conjunto, agrega `--set "Fig. 4.13 — RM"`. SoilSense tiene una entrada
+completa aún pendiente y un análisis separado del subconjunto periódico
+sampling/control/telemetry. Console y flow no tienen modelo de llegada/deadline;
+display no quedó validado visualmente.
 
 ## Fig. 4.13
 
@@ -50,3 +52,24 @@ Una captura finita, incluso de 30 s, puede quedar debajo de una cota de RTA:
 la cota contempla la interferencia y la fase de liberaciones más desfavorables,
 mientras que la prueba solo observa las fases que ocurrieron durante su ventana.
 Los máximos medidos no reemplazan una cota WCET.
+
+## SoilSense ESP32-S3 — subconjunto periódico observado
+
+Se usaron los máximos observados de una ventana de 3 s a 10 MHz: sampling
+`C_obs=4.2 µs` (`n=3000`), control `C_obs=0.4 µs` (`n=300`) y telemetry
+`C_obs=64 µs` (`n=3`). No son cotas WCET. El análisis cubre solo estas tres
+tareas periódicas; no incluye console (llegadas esporádicas sin mínimo de
+separación/deadline), flow (deadline aún no asignado), ni display (OLED no
+funcional visualmente; el pulso de 24.641 ms se conserva como duración no
+validada).
+
+| Tarea | `C_obs` | `T=D` | RTA | Resultado |
+|---|---:|---:|---:|---|
+| sampling | 0.0042 ms | 1 ms | 0.0042 ms | Cumple en el subconjunto |
+| control | 0.0004 ms | 10 ms | 0.0046 ms | Cumple en el subconjunto |
+| telemetry | 0.064 ms | 1000 ms | 0.0686 ms | Cumple en el subconjunto |
+
+La utilización parcial es `U=0.004304` (0.4304%). Liu–Layland para `n=3` y la
+prueba hiperbólica pasan para este subconjunto. Esto no cierra el análisis del
+nodo completo: el resultado no establece deadlines de console/flow, no valida
+el display y no demuestra WCET.

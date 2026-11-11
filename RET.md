@@ -108,13 +108,13 @@ under a declared protocol. A future maximum observed value will be reported as
 
 | Task | Requirement | Type | Activation/period | Deadline | Observed execution time | Observed jitter / period | Priority/policy | Measurement method |
 |---|---|---|---:|---:|---:|---:|---|---|
-| Sensor sampling | REQ-CTRL-03 | Hard | Periodic, 1 ms (1 kHz) | 1 ms | NUCLEO: `C_obs,max` 3 µs baseline; 4 µs cache-off; 12 µs during `calib`. C6: `C_obs,max` 2.7 µs in Week 3. | C6 full kernel: 6 µs idle, 6.2 µs with `calib` observed max | `sampling_tid`, preemptive prio. 2 | GPIO DIO0 + AD2 logic analyzer (all `C_i` values) |
-| Control loop | REQ-CTRL-01 | Hard | Periodic, 10 ms | 10 ms | `C_obs,max` 0.7 µs (300 NUCLEO runs, 10 MHz capture) | C6 full kernel period with `calib`: 10.003 ms observed max | `control_tid`, preemptive prio. 3 | GPIO DIO1 + AD2 logic analyzer |
+| Sensor sampling | REQ-CTRL-03 | Hard | Periodic, 1 ms (1 kHz) | 1 ms | NUCLEO: `C_obs,max` 3 µs baseline; 4 µs cache-off; 12 µs during `calib`. C6: 2.7 µs. S3: mean 0.93787 µs, p99 1.000 µs, max 4.200 µs (`n=3000`, one 3 s window). | C6 full kernel: 6.2 µs with `calib` max | `sampling_tid`, preemptive prio. 2 | GPIO DIO0 + AD2; S3 raw events in EV-W06-CI-S3-DIO0-events.csv |
+| Control loop | REQ-CTRL-01 | Hard | Periodic, 10 ms | 10 ms | NUCLEO max 0.7 µs. S3: mean 351 ns, p99/max 400 ns (`n=300`, one 3 s window). | C6 full kernel period with `calib`: 10.003 ms observed max | `control_tid`, preemptive prio. 3 | GPIO DIO1 + AD2; S3 raw events in EV-W06-CI-S3-DIO1-events.csv |
 | Overpressure emergency stop | REQ-CTRL-02 | Hard | Event-triggered | < 5 ms | Shared with sampling; standalone response not measured | N/A | TBD | Instrumented input-to-output latency |
-| Command console | REQ-CTRL-05, REQ-CTRL-06 | Firm | Event-triggered/sporadic | TBD | `status` path: 4 us to 6.6010 ms across 8 received bytes; `calib` blocks the loop for approximately 414 ms; neither is a WCET | N/A | `console_tid`, preemptive prio. 9 | GPIO DIO2 + AD2 logic analyzer; UART for command input |
-| Telemetry | REQ-CTRL-04 | Soft | Periodic, 1 s | 1 s (derived from task period) | `C_obs,max` 5.7770 ms (30 runs) | TBD | `telemetry_tid`, preemptive prio. 8 | GPIO DIO3 + AD2 logic analyzer |
-| Flow batch | N/A | N/A | Every 100 flow pulses | TBD | `C_obs,max` 44 us (30 batches at 100 Hz stimulus) | N/A | private `flow_wq`, preemptive prio. 5 | GPIO DIO4 + AD2 logic analyzer |
-| Display HMI | N/A | Soft | Periodic, 500 ms when enabled | TBD | Not enabled on this run | N/A | `display_tid`, preemptive prio. 7 | GPIO DIO5 + AD2 logic analyzer (planned) |
+| Command console | REQ-CTRL-05, REQ-CTRL-06 | Firm | Event-triggered/sporadic | TBD | NUCLEO `status` max 6.6010 ms. S3: one `status` command produced 8 pulses, mean 10.625 µs, p99/max 69.100 µs; `calib` wall delay is not CPU `C_i`. No WCET or arrival bound. | N/A | `console_tid`, preemptive prio. 9 | GPIO DIO2 + AD2; S3 raw events in EV-W06-CI-S3-DIO2-events.csv |
+| Telemetry | REQ-CTRL-04 | Soft | Periodic, 1 s | 1 s (derived from task period) | NUCLEO max 5.7770 ms. S3: mean 63.967 µs, p99/max 64.000 µs (`n=3`, one 3 s window); preliminary. | TBD | `telemetry_tid`, preemptive prio. 8 | GPIO DIO3 + AD2; S3 raw events in EV-W06-CI-S3-DIO3-events.csv |
+| Flow batch | N/A | N/A | Every 100 flow pulses; 3 batches at 100 Hz test stimulus | TBD | NUCLEO max 44 µs. S3: mean 2.467 µs, p99/max 2.500 µs (`n=3`). | N/A | private `flow_wq`, preemptive prio. 5 | GPIO DIO4 + AD2; S3 raw events in EV-W06-CI-S3-DIO4-events.csv |
+| Display HMI | N/A | Soft | Periodic, 500 ms when enabled | TBD | OLED did not show image; DIO5 nevertheless pulsed 5 times, mean 24.630 ms, max 24.641 ms. Recorded as unvalidated wall duration, not accepted as `C_i`. | N/A | `display_tid`, preemptive prio. 7 | GPIO DIO5 + AD2; summary in EV-W06-CI-S3-periodic-003.csv |
 
 Instrument rule (from Week 5): every `C_i` above was measured by GPIO pulse width
 on the AD2 logic analyzer, which does not perturb the target. CTF trace
@@ -239,7 +239,7 @@ exist.
 | EV-W06-INV-MUTEX-001 | Week 6 | Repeat with priority inheritance | N/A | ESP32-S3 DevKitC | Control 27.001 ms; measured `B=28.148 ms` | Inversion reduced; 10 ms deadline still fails | `evidence/week06/EV-W06-INV-MUTEX-001.md` and `-annotated.svg` |
 | EV-W06-ESTOP-CALIB-001 | Week 6 | Measure e-stop and `calib` before/after source fixes | REQ-CTRL-02 | ESP32-S3 DevKitC | E-stop 10.080 ms max before / 0.2561 µs one post-fix trip; `calib` 400.8 / 499.4 ms wall; after CPU ≈2.8 ms estimated from Week-5 trace, not directly measured | Before FAIL; one post-fix trip observed below 5 ms | `evidence/week06/EV-W06-ESTOP-CALIB-001.md` and captures |
 | EV-W06-RTA-001 | Week 6 | Apply utilization tests and RTA to Fig. 4.13 and measured inversion cases | N/A | ESP32-S3 DevKitC | RM `R2=8 ms>D2=7 ms`; EDF `U=0.9714≤1`; Task B cases summarized in evidence | RM FAIL; EDF PASS for model; contention misses deadline | `evidence/week06/EV-W06-RTA-001.md`; `scripts/week06_rta.py` |
-| EV-W06-CI-S3 | Week 6 | Measure node task execution widths on the S3 | REQ-CTRL-01, 03, 05 | ESP32-S3 DevKitC | Capture table not yet populated; normal and OLED firmware variants compile | PENDING physical capture | `evidence/week06/EV-W06-CI-S3-PROCEDURE.md` |
+| EV-W06-CI-S3 | Week 6 | Measure node task execution widths on the S3 | REQ-CTRL-01, 03, 05 | ESP32-S3 DevKitC | Sampling/control/telemetry/console/flow captured; display pulse observed but OLED did not render, so full node `C_i` remains incomplete | PARTIAL — periodic subset analyzed; full set pending display and arrival/deadline model | `evidence/week06/EV-W06-CI-S3-PROCEDURE.md` and `EV-W06-CI-S3-*-events.csv` |
 
 ### 3.2 Week 1 — environment and reproducibility
 
@@ -567,16 +567,27 @@ in as each task is completed.
 | `calib` CPU / wall duration, after | ≈2.804 ms estimated CPU / <1 s wall | Week-5 trace: 2.804 µs × 1000; sleeping yields CPU | ≈2.804 ms indirect estimate / 499.4 ms measured wall | EV-W06-ESTOP-CALIB-001 |
 | E-stop sum and measurement, before | ≈10 ms control release + 1 ms PWM = 11 ms | Next control job updates valve | Max 10.080 ms across five trips; exceeds 5 ms | EV-W06-ESTOP-CALIB-001 |
 | E-stop sum and measurement, after | Sampling release/dispatch + remaining `C_sampling` to PWM; µs order | Valve low in detecting sampling job | 0.2561 µs in one trip; not a maximum bound | EV-W06-ESTOP-CALIB-001 |
+| S3 sampling pulse width | ≈1 µs expected from Week-5 sampling scale | 1 kHz task, 10 MHz Logic capture | mean 0.93787 µs; p99 1.000 µs; max 4.200 µs (`n=3000`) | EV-W06-CI-S3-DIO0-events.csv |
+| S3 control pulse width | Sub-µs arithmetic job expected | 100 Hz task, 10 MHz Logic capture | mean 351 ns; p99/max 400 ns (`n=300`) | EV-W06-CI-S3-DIO1-events.csv |
+| S3 telemetry pulse width | Short periodic output path expected | 1 Hz, 10 MHz Logic capture | mean 63.967 µs; p99/max 64.000 µs (`n=3`) | EV-W06-CI-S3-DIO3-events.csv; preliminary sample count |
+| S3 `status` console path | Sporadic; no arrival deadline assigned | One `status` command during 3 s capture | eight pulses; mean 10.625 µs; p99/max 69.100 µs | EV-W06-CI-S3-DIO2-events.csv |
+| S3 flow batch | One batch per 100 input pulses | 100 Hz stimulus for 3 s; 300 input edges | three batches; mean 2.467 µs; p99/max 2.500 µs | EV-W06-CI-S3-DIO4-events.csv |
+| S3 display attempt | 500 ms refresh expected | OLED build; five DIO5 pulses in 3 s | mean 24.630 ms; max 24.641 ms; OLED image not verified, excluded from `C_i` | EV-W06-CI-S3-periodic-003.csv |
 
 The observations match the qualitative predictions, but the isolated Task B
 widths are not the SoilSense node's `C_i`. The 3429 measured RM misses also
 exceed the ideal model's one miss per 35 ms hyperperiod; firmware GPIO,
 calibration-loop and scheduler/context-switch costs can make another τ2 job
 late by a few microseconds. Treat this as an explanation consistent with the
-measurement, not as a separately isolated cause. `calib` fits the one-second
-budget under the observed node task share: Week-5 sampling, control, flow,
-display and telemetry together use about 1.09%, leaving about 989 ms/s. Daniela's
-tasks must be included when supplied. The full S3 `C_i` table remains pending.
+measurement, not as a separately isolated cause. The earlier one-second
+`calib` estimate uses the Week-5 thread CPU profile: sampling, control, flow,
+display and telemetry together used about 1.09%, leaving about 989 ms/s. That
+CPU-share estimate is separate from the DIO pulse widths below. Daniela's tasks
+must be included when supplied. The full S3 `C_i` table remains pending.
+The S3 captures now characterize five GPIO paths, but the full-node RTA remains
+open: display was not visually validated and the console/flow arrival and
+deadline model is unspecified. A separate RTA below uses only the three
+periodic tasks with explicit periods and deadlines.
 
 ### 3.8 Future-week evidence rule
 
@@ -597,19 +608,20 @@ Each new measurement record must state:
 ### 4.1 Input data
 
 All `C_i` inputs shall cite measured evidence and the configuration under which
-they were obtained. The observations below come from different boards and
-implementations. They are **observed execution maxima**, not WCET bounds, and
-cannot be combined into one formal schedulability test without a consistent
-platform, load and blocking model.
+they were obtained. The historical observations below come from different
+boards and implementations and cannot be combined into one formal test. The S3
+subset uses one platform and acquisition configuration, but its values are
+still observed maxima, not WCET bounds; the complete node model also needs
+arrival, deadline and blocking parameters for console, flow and display.
 
 | Task | Available execution evidence | `C_i` for S3 analysis | `T_i` | `D_i` | `B_i` / limitation |
 |---|---|---:|---:|---:|---|
-| Sampling + safety check | NUCLEO: 3 µs; C6: 2.7 µs (different platforms) | TBD — measure GPIO4 pulse on ESP32-S3 | 1 ms | 1 ms | S3 blocking not characterized |
-| Control loop | NUCLEO: 0.7 µs; isolated Week-6 demo: 0.93830 ms (not node firmware) | TBD — measure GPIO5 pulse on ESP32-S3 | 10 ms | 10 ms | Task B response is not node `C_i` |
-| Command console | NUCLEO `status`: 6.6010 ms; C6 `calib`: ≈414 ms | TBD — measure GPIO6 on ESP32-S3 | Sporadic | TBD | Calib wall duration is not CPU `C_i`; command arrival model TBD |
-| Telemetry | NUCLEO: 5.7770 ms | TBD — measure GPIO7 on ESP32-S3 | 1 s | 1 s | S3 value pending |
-| Flow batch | NUCLEO: 44 µs | TBD — measure GPIO8 on ESP32-S3 | Every 100 flow pulses | TBD | Event-driven; deadline not allocated |
-| Display HMI | Not measured; disabled in past run | TBD — measure GPIO9 on ESP32-S3 when enabled | 500 ms | TBD | Optional; S3 value pending |
+| Sampling + safety check | NUCLEO: 3 µs; C6: 2.7 µs; S3 window: mean 0.93787 µs, p99 1.0 µs, max 4.2 µs (`n=3000`) | `C_obs,max=0.0042 ms` | 1 ms | 1 ms | One S3 3 s CSV window; observed max, not WCET |
+| Control loop | NUCLEO: 0.7 µs; isolated Week-6 demo: 0.93830 ms; S3 window: mean 351 ns, p99/max 400 ns (`n=300`) | `C_obs,max=0.0004 ms` | 10 ms | 10 ms | Task B response is not node `C_i`; S3 value from GPIO5 |
+| Command console | NUCLEO `status`: 6.6010 ms; S3 one `status`: 8 pulses, max 69.1 µs | 0.0691 ms observed path | Sporadic | TBD | No minimum arrival separation/deadline; not included in RTA subset |
+| Telemetry | NUCLEO: 5.7770 ms; S3 window: mean 63.967 µs, p99/max 64 µs (`n=3`) | `C_obs,max=0.064 ms` | 1 s | 1 s | Only three samples; observed max, not WCET |
+| Flow batch | NUCLEO: 44 µs; S3 3 batches at 100 Hz input, max 2.5 µs | 0.0025 ms observed | Every 100 flow pulses; 1 s in this stimulus | TBD | Event-driven; deadline not allocated; not included in RTA subset |
+| Display HMI | S3 OLED build: five pulses, max 24.641 ms; no visible OLED image | Not accepted as `C_i` | 500 ms | TBD | Display output unvalidated; not included in RTA subset |
 ### 4.2 Tests and results
 
 | Analysis | Applicability | Result | Evidence/tool | Verdict |
@@ -619,6 +631,7 @@ platform, load and blocking model.
 | Hyperbolic test | Two independent periodic tasks in Fig. 4.13 | Product `2.200000 > 2`; sufficient test inconclusive | EV-W06-RTA-001 | INCONCLUSIVE by this test |
 | EDF utilization test | Fig. 4.13, implicit deadlines | `0.971429 ≤ 1`; measured 60 s with zero misses | EV-W06-RTA-001, EV-W06-EDF-001 | PASS for modeled task set |
 | Response-Time Analysis | Fig. 4.13 RM and isolated Task B | `R2=8 ms>D2=7 ms`; measured cases summarized in §4.4 | EV-W06-RTA-001 / script | RM FAIL for `τ2`; Task B misses its 10 ms deadline under contention |
+| Response-Time Analysis, S3 measured periodic subset | Sampling, control and telemetry only, using observed maxima | `U=0.004304`; `R_sampling=0.0042 ms`, `R_control=0.0046 ms`, `R_telemetry=0.0686 ms` | EV-W06-RTA-001 / script | PASS for this subset only; not full-node/WCET proof |
 | Extended RTA with blocking | Isolated Task B lock experiment | `C+B=29.0863 ms` for mutex case; observed 27.001 ms | EV-W06-RTA-001 / script | Empirical envelope; not a WCET proof |
 | CBS bandwidth | Hub `SCHED_DEADLINE` task | TBD | Pending week 11 | PENDING |
 
