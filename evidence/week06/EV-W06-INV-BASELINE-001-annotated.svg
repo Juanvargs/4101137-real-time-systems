@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1840" height="1360" viewBox="0 0 1840 1360">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#39d5ff"/></marker>
+  </defs>
+  <image href="EV-W06-INV-BASELINE-001.png" x="0" y="0" width="1840" height="1154"/>
+  <rect x="0" y="1154" width="1840" height="206" fill="#171b22"/>
+  <path d="M1050 1152 L1050 326" fill="none" stroke="#39d5ff" stroke-width="4" marker-end="url(#arrow)"/>
+  <rect x="42" y="1180" width="1756" height="140" rx="20" fill="#202833" stroke="#39d5ff" stroke-width="3"/>
+  <text x="920" y="1237" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="38" font-weight="700">BASELINE · Sin contención</text>
+  <text x="920" y="1292" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="32">DIO1 (GPIO5): respuesta de control = 0.93830 ms</text>
+</svg>

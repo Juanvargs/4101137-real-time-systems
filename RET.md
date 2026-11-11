@@ -234,11 +234,12 @@ exist.
 | EV-W05-JITTER-OFF-005 | Week 5 | Sampling period with tracing disabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 1.00000 ms; min 0.99770 ms; max 1.0021 ms; max absolute deviation 2.3 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-OFF-005.md` |
 | EV-W06-RM-001 | Week 6 | Reproduce Fig. 4.13 under RM | N/A | ESP32-S3 DevKitC | `tau1_misses=0`, `tau2_misses=3429` in 60 s; DIO1 width max 6.0099 ms | FAIL for `τ2` | `evidence/week06/EV-W06-RM-001.md` |
 | EV-W06-EDF-001 | Week 6 | Reproduce Fig. 4.13 under EDF | N/A | ESP32-S3 DevKitC | `tau1_misses=0`, `tau2_misses=0` in 60 s | PASS for modeled task set | `evidence/week06/EV-W06-EDF-001.md` |
-| EV-W06-INV-BASELINE-001 | Week 6 | Control response without lock contention | N/A | ESP32-S3 DevKitC | 0.93830 ms | CHARACTERIZED | `evidence/week06/EV-W06-INV-BASELINE-001.md` |
-| EV-W06-INV-SEMAPHORE-001 | Week 6 | Reproduce priority inversion with binary semaphore | N/A | ESP32-S3 DevKitC | Control 50.466 ms; low lock-held 51.604 ms; medium 23.444 ms | FAIL for 10 ms control deadline | `evidence/week06/EV-W06-INV-SEMAPHORE-001.md` |
-| EV-W06-INV-MUTEX-001 | Week 6 | Repeat with priority inheritance | N/A | ESP32-S3 DevKitC | Control 27.001 ms; measured `B=28.148 ms` | Inversion reduced; 10 ms deadline still fails | `evidence/week06/EV-W06-INV-MUTEX-001.md` |
+| EV-W06-INV-BASELINE-001 | Week 6 | Control response without lock contention | N/A | ESP32-S3 DevKitC | 0.93830 ms | CHARACTERIZED | `evidence/week06/EV-W06-INV-BASELINE-001.md` and `-annotated.svg` |
+| EV-W06-INV-SEMAPHORE-001 | Week 6 | Reproduce priority inversion with binary semaphore | N/A | ESP32-S3 DevKitC | Control 50.466 ms; low lock-held 51.604 ms; medium 23.444 ms | FAIL for 10 ms control deadline | `evidence/week06/EV-W06-INV-SEMAPHORE-001.md` and `-annotated.svg` |
+| EV-W06-INV-MUTEX-001 | Week 6 | Repeat with priority inheritance | N/A | ESP32-S3 DevKitC | Control 27.001 ms; measured `B=28.148 ms` | Inversion reduced; 10 ms deadline still fails | `evidence/week06/EV-W06-INV-MUTEX-001.md` and `-annotated.svg` |
 | EV-W06-ESTOP-CALIB-001 | Week 6 | Measure e-stop and `calib` before/after source fixes | REQ-CTRL-02 | ESP32-S3 DevKitC | E-stop 10.080 ms max before / 0.2561 µs one post-fix trip; `calib` 400.8 / 499.4 ms wall; after CPU ≈2.8 ms estimated from Week-5 trace, not directly measured | Before FAIL; one post-fix trip observed below 5 ms | `evidence/week06/EV-W06-ESTOP-CALIB-001.md` and captures |
 | EV-W06-RTA-001 | Week 6 | Apply utilization tests and RTA to Fig. 4.13 and measured inversion cases | N/A | ESP32-S3 DevKitC | RM `R2=8 ms>D2=7 ms`; EDF `U=0.9714≤1`; Task B cases summarized in evidence | RM FAIL; EDF PASS for model; contention misses deadline | `evidence/week06/EV-W06-RTA-001.md`; `scripts/week06_rta.py` |
+| EV-W06-CI-S3 | Week 6 | Measure node task execution widths on the S3 | REQ-CTRL-01, 03, 05 | ESP32-S3 DevKitC | Capture table not yet populated; normal and OLED firmware variants compile | PENDING physical capture | `evidence/week06/EV-W06-CI-S3-PROCEDURE.md` |
 
 ### 3.2 Week 1 — environment and reproducibility
 

@@ -10,6 +10,9 @@
 | DIO0 — low sostiene el lock | **51.604 ms** |
 | DIO2 — trabajo de medium | **23.444 ms** |
 
+Figura anotada (el PNG original queda sin modificar):
+![Inversión con semáforo: LOW, CONTROL y MEDIUM](EV-W06-INV-SEMAPHORE-001-annotated.svg)
+
 La captura corregida libera control 2 ms después de que low toma el lock y
 medium 3 ms después. DIO2 se ejecuta mientras DIO0 continúa sosteniendo el lock
 y DIO1 está alto esperando; al acabar medium, low completa su trabajo y control

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1840" height="1360" viewBox="0 0 1840 1360">
+  <image href="EV-W06-INV-MUTEX-001.png" x="0" y="0" width="1840" height="1154"/>
+  <rect x="0" y="1154" width="1840" height="206" fill="#171b22"/>
+  <g font-family="sans-serif" font-size="20" font-weight="700" text-anchor="middle" dominant-baseline="central" stroke="#11151a" stroke-width="2" paint-order="stroke">
+    <circle cx="625" cy="357" r="15" fill="#ff88bd"/><text x="625" y="357" fill="#11151a">1</text>
+    <circle cx="654" cy="324" r="15" fill="#65f044"/><text x="654" y="324" fill="#11151a">2</text>
+    <circle cx="970" cy="357" r="15" fill="#e34de0"/><text x="970" y="357" fill="#11151a">3</text>
+    <circle cx="1048" cy="291" r="15" fill="#ffd04f"/><text x="1048" y="291" fill="#11151a">4</text>
+  </g>
+  <rect x="30" y="1172" width="435" height="156" rx="16" fill="#462b3c" stroke="#ff88bd" stroke-width="3"/>
+  <rect x="480" y="1172" width="435" height="156" rx="16" fill="#203c22" stroke="#65f044" stroke-width="3"/>
+  <rect x="930" y="1172" width="435" height="156" rx="16" fill="#3a2344" stroke="#e34de0" stroke-width="3"/>
+  <rect x="1380" y="1172" width="430" height="156" rx="16" fill="#202833" stroke="#9ca9bb" stroke-width="3"/>
+  <text x="248" y="1218" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="27" font-weight="700">1 · LOW toma k_mutex</text>
+  <text x="248" y="1260" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="25">DIO0 · sección B = 28.148 ms</text>
+  <text x="698" y="1218" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="27" font-weight="700">2 · CONTROL pide el lock</text>
+  <text x="698" y="1260" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="25">DIO1 se bloquea brevemente</text>
+  <text x="1148" y="1218" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="27" font-weight="700">3 · LOW hereda prioridad</text>
+  <text x="1148" y="1260" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="25">LOW termina antes de MEDIUM</text>
+  <text x="1595" y="1218" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="25" font-weight="700">4 · CONTROL continúa</text>
+  <text x="1595" y="1260" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="23">R = 27.001 ms; luego MEDIUM</text>
+</svg>

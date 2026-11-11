@@ -10,6 +10,9 @@
 | DIO0 — sección crítica de low (B) | **28.148 ms** |
 | DIO2 — trabajo de medium | **23.442 ms** |
 
+Figura anotada (el PNG original queda sin modificar):
+![Priority inheritance con mutex](EV-W06-INV-MUTEX-001-annotated.svg)
+
 Con el mutex, low hereda temporalmente la prioridad de control y completa su
 sección crítica antes de que medium ejecute. Control responde en 27.001 ms,
 frente a 50.466 ms con semáforo y 0.93830 ms sin contención.

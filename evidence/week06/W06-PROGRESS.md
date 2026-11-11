@@ -42,10 +42,10 @@ Plataforma: ESP32-S3 DevKitC. Usar GPIO4/GPIO5 para los pulsos de Task A; GPIO21
 - [x] Comparar RTA con los resultados medidos, incluyendo bloqueo (`EV-W06-RTA-001.md`).
 - [x] Completar ADR-002 con estado/datos compartidos y ADR-005 con números corregidos y ambas sumas e-stop.
 - [x] Añadir tabla predictivo/observado de Semana 6 y lectura en §3.7; registrar por separado qué valores de Task B no son `C_i` del nodo.
-- [ ] Medir en la S3 los `C_i` de sampling, control, telemetry, console, flow y display con el firmware de instrumentación del kernel; actualizar JSON, RTA, §3 y §4.
-- [ ] Anotar las tres capturas de Task B con la secuencia low toma lock → control espera → medium preempta (semaphore) y low hereda prioridad → control corre antes de medium (mutex).
+- [ ] Medir en la S3 los `C_i` de sampling, control, telemetry, console, flow y display con el firmware de instrumentación del kernel; actualizar JSON, RTA, §3 y §4. Procedimiento listo en `EV-W06-CI-S3-PROCEDURE.md`; ambos builds compilan, pero falta conectar la placa/AD2 para adquirir datos.
+- [x] Anotar las tres capturas de Task B con las secuencias de LOW/CONTROL/MEDIUM; conservar los PNG originales y enlazar vistas SVG anotadas.
 - [x] Explicar la diferencia entre 3429 misses observados y 1714 del modelo ideal en `EV-W06-RM-001.md`; el mecanismo se presenta como hipótesis consistente con overhead medido/no aislado.
 - [x] Hacer que `scripts/week06_rta.py` lea conjuntos modificables desde JSON y permita elegir un conjunto por argumento.
 - [x] Declarar el uso de Codex y atribuir las mediciones/capturas a las ejecuciones del usuario.
 - Problem Set de capítulos 2, 4, 7 y RTA: omitido por decisión explícita del usuario; el taller de Semana 7 lo solicita como prerrequisito.
-- [ ] Revisar, integrar y subir el commit de cierre una vez resueltas las tareas de documentación pendientes que dependan de capturas.
+- [x] Integrar y subir la documentación/annotaciones y preparar los dos builds del kernel. El commit final del laboratorio depende de capturar los seis `C_i` en la S3 y recalcular el JSON/RTA.
