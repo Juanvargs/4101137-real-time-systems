@@ -9,14 +9,15 @@
 | Course | Real-Time Systems — UNAL 4101137 |
 | Team | Individual — Juan Pablo Vargas Cordoba |
 | Authors | Juan Pablo Vargas Cordoba |
-| Status | Draft — Weeks 1–5 recorded; formal timing and safety verification pending |
-| Version | 0.7 |
-| Date | 2026-11-06 |
-| Repository baseline | Measurements span several firmware configurations; see each evidence record for its baseline |
+| Status | Draft — Week 6 evidence added; S3 node schedulability and formal safety verification remain pending |
+| Version | 0.8 |
+| Date | 2026-11-11 |
+| Repository baseline | Week 6 work merged with Week 5 evidence branch; each record states its platform and firmware |
 | Starter board | NUCLEO-G474RE — student-owned; course baseline differs |
 | Board/debug identifier | STLINK-V3 `003400303232510139353236` |
-| Week 3 comparison MCU | ESP32-C6 DevKitC compatible, 4 MB flash |
-| AI use | 2026-11-06: Codex (GPT-6) reorganized this report; no measurements were generated. Earlier per-week use remains to be documented |
+| Week 3–4 comparison MCU | ESP32-C6 DevKitC compatible, 4 MB flash |
+| Week 5–6 MCU | ESP32-S3 DevKitC — identifier pending (OI-006) |
+| AI use | Week 6: Codex (GPT-6) modified firmware, wrote analysis/script/evidence; user supplied hardware measurements and captures |
 
 ### Revision history
 
@@ -28,7 +29,8 @@
 | 0.4 | 2026-10-10 | Juan Pablo Vargas Cordoba | Added observed widths for control, console, telemetry, and flow batch |
 | 0.5 | 2026-10-15 | Juan Pablo Vargas Cordoba | Added ESP32-C6 superloop versus sampling-thread timing evidence |
 | 0.6 | 2026-10-27 | Juan Pablo Vargas Cordoba | Added complete kernel A/B, visible hand-off cost, stack high-water marks, and ADR-001 |
-| 0.7 | 2026-11-06 | Juan Pablo Vargas Cordoba; Codex editing assistance | Reorganized the reading path, reconciled Week-5 references and current evidence, and clarified pending analysis without changing measurements |
+| 0.7 | 2026-11-10 | Juan Pablo Vargas Cordoba; Codex editing assistance | Reconciled Week-5 references, added annotated traces and clarified timing limitations |
+| 0.8 | 2026-11-11 | Juan Pablo Vargas Cordoba; Codex editing assistance | Merged Week-5 records; added Week-6 analysis and corrected calibration CPU estimate |
 
 ## Purpose and evidence rule
 
@@ -50,7 +52,7 @@ accepted as timing evidence.
 | Week 2 | NUCLEO-G474RE superloop | Sampling maximum period 6.845 ms at baseline and 414.06 ms during `calib` | The 1 ms sampling requirement failed under the measured workloads | §3.3; EV-W02-BASELINE-002, EV-W02-BLOCK-005 |
 | Week 3 | ESP32-C6 superloop and sampling thread | `calib` sampling jitter fell from 402.47 ms to 2 µs; control still reached 412.31 ms | Moving sampling to a higher-priority thread protected sampling but not control | §3.4; EV-W03-THREAD-004 |
 | Week 4 | ESP32-C6 full kernel | Sampling maximum period 1.0056 ms and control maximum period 10.003 ms during `calib` | Large mitigation; both strict nominal periods were still exceeded in observation | §3.5; EV-W04-AB-001 |
-| Week 5 | ESP32-S3 tracing | Maximum absolute sampling jitter: 12.7 µs with tracing, 2.3 µs without | The difference between the observed maxima was 10.4 µs in this S3 comparison | §3.6; EV-W05-JITTER-ON-001, EV-W05-JITTER-OFF-001 |
+| Week 5 | ESP32-S3 tracing | Maximum absolute sampling jitter: 12.7 µs with tracing, 2.3 µs without | The difference between the observed maxima was 10.4 µs in this S3 comparison | §3.6; EV-W05-JITTER-ON-004, EV-W05-JITTER-OFF-005 |
 
 The Week-3/4 C6 results and Week-5 S3 results use different boards and
 instrumentation. Their raw numbers should not be treated as a same-board A/B test.
@@ -64,6 +66,8 @@ and §6 reserves the final-project agent-built component record.
 |---|---|---|---|
 | Weeks 1–5 | Not documented in this RET | Per-week disclosure remains open | No claim made |
 | 2026-11-06, document revision 0.7 | OpenAI Codex (GPT-6) | Reorganized and cross-checked the existing report | No new measurement or timing verdict produced |
+| Week 6, revision 0.8 | OpenAI Codex (GPT-6) | Edited Task A firmware and RTA script; drafted analysis, evidence text and RET corrections. The user ran the hardware experiments and supplied captures and UART results. | Codex did not perform or fabricate hardware measurements; observations are from the user-provided runs. |
+| Week 6, revision 0.8 | OpenAI Codex (GPT-6) | Edited Task A firmware and RTA script; drafted analysis, evidence text and RET corrections. The user ran the hardware experiments and supplied captures and UART results. | Codex did not perform or fabricate hardware measurements; observations are from the user-provided runs. |
 
 ## 1. The system and its task set
 
@@ -104,13 +108,18 @@ under a declared protocol. A future maximum observed value will be reported as
 
 | Task | Requirement | Type | Activation/period | Deadline | Observed execution time | Observed jitter / period | Priority/policy | Measurement method |
 |---|---|---|---:|---:|---:|---:|---|---|
-| Sensor sampling | REQ-CTRL-03 | Hard | Periodic, 1 ms (1 kHz) | 1 ms | NUCLEO: `C_obs,max` 3 µs baseline; 4 µs cache-off; 12 µs during `calib`. C6: `C_obs,max` 2.7 µs in Week 3. | C6 full kernel: 6 µs idle, 6.2 µs with `calib` observed max | `sampling_tid`, preemptive prio. 2 | GPIO + analyzer |
-| Control loop | REQ-CTRL-01 | Hard | Periodic, 10 ms | 10 ms | `C_obs,max` 0.7 µs (300 NUCLEO runs, 10 MHz capture) | C6 full kernel period with `calib`: 10.003 ms observed max | `control_tid`, preemptive prio. 3 | GPIO + analyzer |
+| Sensor sampling | REQ-CTRL-03 | Hard | Periodic, 1 ms (1 kHz) | 1 ms | NUCLEO: `C_obs,max` 3 µs baseline; 4 µs cache-off; 12 µs during `calib`. C6: `C_obs,max` 2.7 µs in Week 3. | C6 full kernel: 6 µs idle, 6.2 µs with `calib` observed max | `sampling_tid`, preemptive prio. 2 | GPIO DIO0 + AD2 logic analyzer (all `C_i` values) |
+| Control loop | REQ-CTRL-01 | Hard | Periodic, 10 ms | 10 ms | `C_obs,max` 0.7 µs (300 NUCLEO runs, 10 MHz capture) | C6 full kernel period with `calib`: 10.003 ms observed max | `control_tid`, preemptive prio. 3 | GPIO DIO1 + AD2 logic analyzer |
 | Overpressure emergency stop | REQ-CTRL-02 | Hard | Event-triggered | < 5 ms | Shared with sampling; standalone response not measured | N/A | TBD | Instrumented input-to-output latency |
-| Command console | REQ-CTRL-05, REQ-CTRL-06 | Firm | Event-triggered/sporadic | TBD | `status` path: 4 us to 6.6010 ms across 8 received bytes; `calib` blocks the loop for approximately 414 ms; neither is a WCET | N/A | `console_tid`, preemptive prio. 9 | UART + DIO2 trace |
-| Telemetry | REQ-CTRL-04 | Soft | Periodic, 1 s | 1 s (derived from task period) | `C_obs,max` 5.7770 ms (30 runs) | TBD | `telemetry_tid`, preemptive prio. 8 | DIO3 trace |
-| Flow batch | N/A | N/A | Every 100 flow pulses | TBD | `C_obs,max` 44 us (30 batches at 100 Hz stimulus) | N/A | private `flow_wq`, preemptive prio. 5 | DIO4 trace |
-| Display HMI | N/A | Soft | Periodic, 500 ms when enabled | TBD | Not enabled on this run | N/A | `display_tid`, preemptive prio. 7 | DIO5 trace |
+| Command console | REQ-CTRL-05, REQ-CTRL-06 | Firm | Event-triggered/sporadic | TBD | `status` path: 4 us to 6.6010 ms across 8 received bytes; `calib` blocks the loop for approximately 414 ms; neither is a WCET | N/A | `console_tid`, preemptive prio. 9 | GPIO DIO2 + AD2 logic analyzer; UART for command input |
+| Telemetry | REQ-CTRL-04 | Soft | Periodic, 1 s | 1 s (derived from task period) | `C_obs,max` 5.7770 ms (30 runs) | TBD | `telemetry_tid`, preemptive prio. 8 | GPIO DIO3 + AD2 logic analyzer |
+| Flow batch | N/A | N/A | Every 100 flow pulses | TBD | `C_obs,max` 44 us (30 batches at 100 Hz stimulus) | N/A | private `flow_wq`, preemptive prio. 5 | GPIO DIO4 + AD2 logic analyzer |
+| Display HMI | N/A | Soft | Periodic, 500 ms when enabled | TBD | Not enabled on this run | N/A | `display_tid`, preemptive prio. 7 | GPIO DIO5 + AD2 logic analyzer (planned) |
+
+Instrument rule (from Week 5): every `C_i` above was measured by GPIO pulse width
+on the AD2 logic analyzer, which does not perturb the target. CTF trace
+timestamps include the tracer's own cost (EV-W05-JITTER-ON-004/OFF-005) and are
+used only to explain the order of events, never as a `C_i` source.
 
 Observed execution maxima and period deviations are not WCET or jitter bounds.
 Unknown response times, blocking terms and deadlines remain explicit until they
@@ -121,8 +130,8 @@ are measured, bounded or specified by the course.
 | Requirement | Implementing task | Analysis | Evidence | Verdict |
 |---|---|---|---|---|
 | REQ-CTRL-01 | Control loop | Utilization + RTA | EV-W02-TASKS-006 records observed width; EV-W04-AB-001 observes 10.003 ms maximum period during `calib` | Observed 10 ms release-period target missed; completion response bound and analytical proof pending |
-| REQ-CTRL-02 | Overpressure emergency stop | Instrumented detection-to-valve latency, before/after ADR-005 | EV-W06-ESTOP-CALIB-BEFORE-001: before max 10.080 ms; after 0.2561 µs in one trip | Prototype PASS after fix; five-trip post-fix maximum not characterized |
-| REQ-CTRL-03 | Sensor sampling | Period/jitter analysis | EV-W02-BASELINE-002, EV-W02-CACHE-004, EV-W02-BLOCK-005, EV-W03-BASELINE-002, EV-W03-THREAD-004, EV-W04-AB-001; S3 tracing comparison: EV-W05-JITTER-ON-001 and EV-W05-JITTER-OFF-001 | Observed 1 ms release-period target missed in measured C6 runs; completion response bound pending. S3 tracing result is a separate platform comparison |
+| REQ-CTRL-02 | Overpressure emergency stop | Instrumented detection-to-valve latency, before/after ADR-005 | EV-W06-ESTOP-CALIB-001: before max 10.080 ms; after 0.2561 µs in one trip | Before FAIL; one post-fix trip below 5 ms; five-trip post-fix maximum not characterized |
+| REQ-CTRL-03 | Sensor sampling | Period/jitter analysis | EV-W02-BASELINE-002, EV-W02-CACHE-004, EV-W02-BLOCK-005, EV-W03-BASELINE-002, EV-W03-THREAD-004, EV-W04-AB-001; S3 tracing comparison: EV-W05-JITTER-ON-004 and EV-W05-JITTER-OFF-005 | Observed 1 ms release-period target missed in measured C6 runs; completion response bound pending. S3 tracing result is a separate platform comparison |
 | REQ-CTRL-04 | Telemetry | Period characterization | EV-W02-TASKS-006 observed 30 publications in 30 s; period statistic pending | INCONCLUSIVE |
 | REQ-CTRL-05 | Command console | Response-time characterization | EV-W02-TASKS-006 (`status`) and EV-W02-BLOCK-005; deadline is TBD | INCONCLUSIVE |
 | REQ-CTRL-06 | Console versus hard sampling | Non-interference trace | EV-W02-BLOCK-005, EV-W03-CALIB-003, EV-W03-THREAD-004, EV-W04-AB-001 | FAIL strict; sampling interference strongly reduced |
@@ -165,11 +174,13 @@ exist.
 ### ADR-002 — Mutual-exclusion policy
 
 - **Status:** Accepted for shared locks in Week 6; formal production WCET remains pending.
-- **Context:** A low-priority owner can block the high-priority control thread. With a binary semaphore, medium-priority work preempts the owner and extends that inversion.
+- **Context:** A low-priority owner can block the high-priority control thread. In the SoilSense node, the shared state to protect includes `setpoint_mv` and `estop`: console commands and sampling update them, while control reads them. With a binary semaphore, medium-priority work preempts the owner and extends that inversion. The isolated experiment maps to the node as high-priority control requesting state held by low-priority console, while medium-priority telemetry can preempt the console owner.
 - **Alternatives:** no shared lock; a binary semaphore; a Zephyr `k_mutex` with priority inheritance.
 - **Decision:** Use `k_mutex` whenever a high-priority task can wait on a lock held by a lower-priority task. Do not use a plain binary semaphore as a mutex.
 - **Quantitative evidence:** control response was 0.93830 ms without contention, 50.466 ms with the semaphore, and 27.001 ms with PI. The mutex low-thread critical-section pulse measured `B=28.148 ms`; measured `C_control=0.93830 ms`, so the simple `C+B` envelope is 29.08630 ms and contains the observed mutex response. The 51.604 ms semaphore lock-held pulse includes medium-thread interference and is not a protocol-level bound. Both contention cases still exceed the experiment's 10 ms control deadline.
+- **Implementation status:** this policy is justified by the isolated Task B experiment; the current SoilSense firmware's accesses to `setpoint_mv` and `estop` have not yet been converted to this mutex. The experiment does not by itself prove node-level locking correctness.
 - **Consequences:** PI bounds the priority inversion to the owner's remaining critical section under the mutex protocol, but it does not make a 28 ms critical section acceptable for a 10 ms deadline. Reduce the critical section before product use.
+- **Implementation status:** this policy is justified by the isolated Task B experiment; the current SoilSense firmware accesses to `setpoint_mv` and `estop` have not yet been converted to this mutex. The experiment does not by itself prove node-level locking correctness.
 
 ### ADR-005 — E-stop and `calib` at the source
 
@@ -177,8 +188,9 @@ exist.
 - **Context:** Before the fix, the sampling thread detected overpressure but the valve duty was not cleared until the next control release. Across five trips, detection-to-valve-low reached 10.080 ms, missing the 5 ms requirement. `calib` used 1000 active waits of 400 µs, requesting about 400 ms of CPU.
 - **Alternatives:** retain control-thread valve shutdown and active calibration waits; yield during sensor settling and close the valve directly from the detecting sampling job.
 - **Decision:** Replace each `k_busy_wait(400)` with `k_usleep(400)`, and set `duty_pct=0` in the sampling e-stop branch before the same job's PWM write. Preserve `instr_flow` as the detection marker.
-- **Quantitative evidence:** pre-fix calibration wall duration was 400.8 ms; after, 499.4 ms. Console runtime increased 27,746,110 cycles across the post-calibration interval, ≈115.6 ms at 240 MHz, including UART and analyzer-command overhead. This is substantially below the ≈400 ms active-wait CPU request. E-stop maximum was 10.080 ms before and 0.2561 µs in the one measured post-fix trip.
-- **Timing analysis:** `k_usleep(400)` yields CPU but resumes on tick/scheduler boundaries; 1000 waits measured about 499.4 ms wall time, not 400 ms CPU. If a 1 s period is configured, the current task set's `U=97.14%` leaves 28.6 ms/s for lower-priority work, so no claim is made that `calib` fits within one second under that load. A 1 kHz tick could round each 400 µs sleep to 1 ms, consuming about one second of wall time before loop overhead.
+- **Quantitative evidence:** pre-fix calibration wall duration was 400.8 ms; after, 499.4 ms. The 115.6 ms inferred from `console_tid` cycle deltas is invalid because the `threads` reports' polling UART output dominates the interval. Applying the guide's Week-5 trace method (2.804 µs per wait interval × 1000) estimates ≈2.804 ms of CPU after the fix; see EV-W06-ESTOP-CALIB-001. E-stop maximum was 10.080 ms before and 0.2561 µs in the one measured post-fix trip.
+- **Timing analysis:** `k_usleep(400)` yields CPU but resumes on tick/scheduler boundaries; 1000 waits measured about 499.4 ms wall time, not 400 ms CPU. EV-W05-CPU-001 indicates the node tasks above the console use approximately 1.09% CPU, leaving ≈989 ms per second under that observed load. Both the ≈400 ms pre-fix CPU request and ≈2.804 ms post-fix estimate fit that budget; 499.4 ms observed wall duration also fits one second. This is not a WCET claim. A 1 kHz tick could round each 400 µs sleep to 1 ms, approaching one second of wall time before loop overhead; Daniela's tasks must be added when their parameters are available.
+- **E-stop path sums:** before the fix, up to one control period (10 ms) plus one PWM step (1 ms) gives ≈11 ms, beyond the 5 ms requirement. After the fix, the path is sampling release/dispatch latency plus the remaining sampling execution through the PWM write, on the order of microseconds; one trip measured 0.2561 µs. The S3 sampling `C_i` and repeated post-fix trips remain to be measured before claiming a bound.
 - **Consequences:** the measured e-stop path now closes the prototype valve in the detecting sampling job. The remaining system-level `C_i`, hardware shutdown path, and five-trip post-fix maximum are not yet established.
 
 ### ADR-003 — Core allocation for the hard loop
@@ -216,17 +228,17 @@ exist.
 | EV-W04-COST-002 | Week 4 | Measure visible sampling-to-control hand-off gap | N/A | ESP32-C6 DevKitC compatible | Max observed gap 11.7 µs; 1.17 ms/s estimated at 100 hand-offs/s | CHARACTERIZED | `evidence/week04/EV-W04-COST-002.md` |
 | EV-W04-STACK-003 | Week 4 | Measure thread stack high-water marks under load | N/A | ESP32-C6 DevKitC compatible | `idle` 228/256 B (89 %); `control_tid` 236/1024 B | CHARACTERIZED; idle margin needs review | `evidence/week04/EV-W04-STACK-003.md` |
 | EV-W05-CPU-001 | Week 5 | Normal-operation per-thread CPU share, including idle and tracer | N/A | ESP32-S3 DevKitC | `idle` 97.99 %; `tracing_thread` 0.79 %; shares normalized from analyzer cycle counts | CHARACTERIZED; cumulative since boot | `evidence/week05/EV-W05-CPU-001.md` |
-| EV-W05-PREEMPT-002 | Week 5 | CTF event sequence during `calib` | N/A | ESP32-S3 DevKitC | Console → sampling observed switch interval 4.837 µs; ISR-to-sampling start 20.012 µs; `lat_peak_us` 30 µs | CHARACTERIZED; CTF overhead applies | `evidence/week05/EV-W05-PREEMPT-002.md` |
-| EV-W05-CONTROL-003 | Week 5 | Tenth-sample control semaphore release | N/A | ESP32-S3 DevKitC | `semaphore_give` 12.171 ms; `control_tid` switched in 12.195 ms | CHARACTERIZED | `evidence/week05/EV-W05-CONTROL-003.png` |
-| EV-W05-JITTER-ON-001 | Week 5 | Sampling period with tracing enabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 0.99999 ms; min 0.98730 ms; max 1.0065 ms; max absolute deviation 12.7 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-ON-001.png` |
-| EV-W05-JITTER-OFF-001 | Week 5 | Sampling period with tracing disabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 1.00000 ms; min 0.99770 ms; max 1.0021 ms; max absolute deviation 2.3 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-OFF-001.png` |
+| EV-W05-PREEMPT-002 | Week 5 | CTF event sequence during `calib` | N/A | ESP32-S3 DevKitC | Console → sampling switch interval 4.837 µs; ISR-to-sampling start 20.012 µs; `lat_peak_us` 30 µs | CHARACTERIZED; CTF overhead applies | `evidence/week05/EV-W05-PREEMPT-002.md` and `-annotated.png` |
+| EV-W05-CONTROL-003 | Week 5 | Tenth-sample control semaphore release | N/A | ESP32-S3 DevKitC | `semaphore_give` 12.171 ms; `control_tid` switched in 12.195 ms | CHARACTERIZED | `evidence/week05/EV-W05-CONTROL-003-annotated.png` |
+| EV-W05-JITTER-ON-004 | Week 5 | Sampling period with tracing enabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 0.99999 ms; min 0.98730 ms; max 1.0065 ms; max absolute deviation 12.7 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-ON-004.md` |
+| EV-W05-JITTER-OFF-005 | Week 5 | Sampling period with tracing disabled | REQ-CTRL-03 | ESP32-S3 DevKitC | Mean 1.00000 ms; min 0.99770 ms; max 1.0021 ms; max absolute deviation 2.3 µs | CHARACTERIZED | `evidence/week05/EV-W05-JITTER-OFF-005.md` |
 | EV-W06-RM-001 | Week 6 | Reproduce Fig. 4.13 under RM | N/A | ESP32-S3 DevKitC | `tau1_misses=0`, `tau2_misses=3429` in 60 s; DIO1 width max 6.0099 ms | FAIL for `τ2` | `evidence/week06/EV-W06-RM-001.md` |
 | EV-W06-EDF-001 | Week 6 | Reproduce Fig. 4.13 under EDF | N/A | ESP32-S3 DevKitC | `tau1_misses=0`, `tau2_misses=0` in 60 s | PASS for modeled task set | `evidence/week06/EV-W06-EDF-001.md` |
 | EV-W06-INV-BASELINE-001 | Week 6 | Control response without lock contention | N/A | ESP32-S3 DevKitC | 0.93830 ms | CHARACTERIZED | `evidence/week06/EV-W06-INV-BASELINE-001.md` |
 | EV-W06-INV-SEMAPHORE-001 | Week 6 | Reproduce priority inversion with binary semaphore | N/A | ESP32-S3 DevKitC | Control 50.466 ms; low lock-held 51.604 ms; medium 23.444 ms | FAIL for 10 ms control deadline | `evidence/week06/EV-W06-INV-SEMAPHORE-001.md` |
 | EV-W06-INV-MUTEX-001 | Week 6 | Repeat with priority inheritance | N/A | ESP32-S3 DevKitC | Control 27.001 ms; measured `B=28.148 ms` | Inversion reduced; 10 ms deadline still fails | `evidence/week06/EV-W06-INV-MUTEX-001.md` |
-| EV-W06-ESTOP-CALIB-BEFORE-001 | Week 6 | Measure e-stop and `calib` before/after source fixes | REQ-CTRL-02 | ESP32-S3 DevKitC | E-stop 10.080 ms max before / 0.2561 µs one post-fix trip; `calib` 400.8 / 499.4 ms wall and post CPU ≈115.6 ms | Before FAIL; one post-fix trip meets 5 ms | `evidence/week06/EV-W06-ESTOP-CALIB-BEFORE-001.md`, `EV-W06-ESTOP-BEFORE-001.png`, `EV-W06-ESTOP-AFTER-001.png`, `EV-W06-CALIB-BEFORE-001.png`, `EV-W06-CALIB-AFTER-001.png` |
-| EV-W06-RTA-001 | Week 6 | Apply utilization tests and RTA to Fig. 4.13 and measured inversion cases | N/A | ESP32-S3 DevKitC | RM `R2=8 ms>D2=7 ms`; EDF `U=0.9714≤1`; measured Task B cases lie below their empirical `C+B` envelopes | RM FAIL; EDF PASS for model; contention misses 10 ms deadline | `evidence/week06/EV-W06-RTA-001.md`; `scripts/week06_rta.py` |
+| EV-W06-ESTOP-CALIB-001 | Week 6 | Measure e-stop and `calib` before/after source fixes | REQ-CTRL-02 | ESP32-S3 DevKitC | E-stop 10.080 ms max before / 0.2561 µs one post-fix trip; `calib` 400.8 / 499.4 ms wall; after CPU ≈2.8 ms estimated from Week-5 trace, not directly measured | Before FAIL; one post-fix trip observed below 5 ms | `evidence/week06/EV-W06-ESTOP-CALIB-001.md` and captures |
+| EV-W06-RTA-001 | Week 6 | Apply utilization tests and RTA to Fig. 4.13 and measured inversion cases | N/A | ESP32-S3 DevKitC | RM `R2=8 ms>D2=7 ms`; EDF `U=0.9714≤1`; Task B cases summarized in evidence | RM FAIL; EDF PASS for model; contention misses deadline | `evidence/week06/EV-W06-RTA-001.md`; `scripts/week06_rta.py` |
 
 ### 3.2 Week 1 — environment and reproducibility
 
@@ -242,7 +254,7 @@ open as OI-001 in Appendix B.
 | ARM toolchain for the starter board is installed | PASS | EV-W01-ENV-001 |
 | Xtensa toolchain for ESP32-S3 is installed | PASS | EV-W01-ENV-001 |
 | User belongs to the serial-access group (`dialout`) | PASS | EV-W01-ENV-001 |
-| VS Code or the selected editor is available | PASS | GNU nano 7.2 is the declared alternative (OI-005); `code` was not found |
+| VS Code or the selected editor is available | PASS | GNU nano 7.2 declared as the course editor (OI-005); `code` was not found |
 | Starter-board target confirmed | PASS | NUCLEO-G474RE; Zephyr target `nucleo_g474re` |
 | `blinky` builds for the physical board | PASS | EV-W01-BUILD-002 |
 | `blinky` is flashed and LD2 blinks | PASS | EV-W01-HW-003 |
@@ -455,9 +467,49 @@ was 20.012 µs; the firmware's cumulative `lat_peak_us` was 30 µs. The observed
 are CTF timestamps and include tracing effects; Week 4's 11.7 µs GPIO hand-off
 was measured on the ESP32-C6, so the values are not a same-board instrument A/B.
 
-At the control release, `semaphore_give` occurred at 12.171 ms, `control_tid`
-became ready at 12.175 ms, and switched in at 12.195 ms after sampling blocked.
-The event log is retained in `EV-W05-CONTROL-003.png`.
+The chain matches the lab's expected sequence: tick ISR → `sampling_tid` ready
+(the ISR's `k_msgq_put`) → `console_tid` switched out with no `thread_sched_pend`,
+so it was preempted while still ready → `sampling_tid` runs and `instr_samp`
+(GPIO4, `pins=16`) rises → `sampling_tid` pends in `k_msgq_get` → `console_tid`
+resumes its `k_busy_wait(400)`.
+
+At the tenth tick, `k_sem_give` does **not** send the CPU to control. The give
+occurred at 12.171 ms and `control_tid` became ready at 12.175 ms. Sampling
+(priority 2) kept the CPU until it pended at 12.184 ms, and only then was
+`control_tid` (priority 3) switched in, at 12.195 ms, raising `instr_ctrl`
+(GPIO5, `pins=32`) at 12.202 ms. The annotated event logs are
+`EV-W05-PREEMPT-002-annotated.png` and `EV-W05-CONTROL-003-annotated.png`.
+
+#### Why the trace and the GPIO measurements differ
+
+The two instruments do not time the same thing, so their numbers are not
+expected to match:
+
+1. **Different observation points.** CTF timestamps are taken in software at
+   kernel hooks (`isr_enter`, `thread_switched_out/in`). GPIO edges come from
+   `instr_set()` calls inside the task code. The CTF "switch" of 4.837 µs is
+   only the gap between the switched-out and switched-in hooks within one
+   switch. The Week-4 11.7 µs GPIO gap runs from the end of sampling's code to
+   the start of control's code, and therefore also includes `k_sem_give`, the
+   pend, the scheduler decision and the return from `k_sem_take`.
+2. **Different transitions.** The 4.837 µs trace value is a console →
+   sampling preemption; the 11.7 µs GPIO value is a sampling → control
+   semaphore hand-off.
+3. **The tracer adds time to what it observes.** Every traced call costs time
+   on the S3: one traced `gpio_port_set_bits_raw` took 154.654 → 157.287 µs,
+   about 2.6 µs from enter to exit. The ISR → sampling-start path of 20.012 µs
+   contains three recorded events, so part of it is the tracer itself. This is
+   consistent with the 10.4 µs jitter increase measured by the AD2, which does
+   not perturb the target.
+4. **Different statistics.** The 20.012 µs value is one tick. `lat_peak_us`
+   (30 µs) is the firmware's cumulative maximum since boot, taken with tracing
+   enabled, so it need not correspond to the traced tick.
+5. **Different boards.** The Week-4 GPIO reference was measured on the
+   ESP32-C6; the Week-5 trace was taken on the ESP32-S3.
+
+For these reasons the AD2 remains the judge of the numbers (the period and
+jitter of EV-W05-JITTER-ON-004/OFF-005), while the CTF trace is used for the
+story: who ran, in what order, and why.
 
 The AD2 measured a nominal 1 ms sampling period with tracing enabled and
 disabled under the same 30 M sample, 10 MHz protocol. Define maximum jitter here
@@ -489,11 +541,43 @@ portion that survives. The command itself continues for about 400 ms.
 #### Week 5 evidence
 
 - `EV-W05-CPU-001.md`: analyzer transcript, cycle counts, and normalized shares.
-- `EV-W05-PREEMPT-002.md` and `.png`: preemption trace during `calib`.
-- `EV-W05-CONTROL-003.png`: semaphore release and control-thread dispatch events.
-- `EV-W05-JITTER-ON-001.png` and `EV-W05-JITTER-OFF-001.png`: paired AD2 captures.
+- `EV-W05-PREEMPT-002.md`, `.png` and `-annotated.png`: preemption trace during `calib`.
+- `EV-W05-CONTROL-003.png` and `-annotated.png`: semaphore release and control-thread dispatch.
+- `EV-W05-JITTER-ON-004.md` and `EV-W05-JITTER-OFF-005.md` with their `.png`:
+  paired AD2 captures. The firmware commit and the workload still need to be
+  confirmed (OI-007).
 
-### 3.7 Future-week evidence rule
+### 3.7 Week 6 — Schedulability, response time and priority inversion
+
+#### Predictions (stated before the lab)
+
+Predicted values were derived from the task parameters and earlier
+measurements before running the Week-6 experiments. Measured values are filled
+in as each task is completed.
+
+| Measurement | Prediction | Basis of the prediction | Observed value | Reference |
+|---|---|---|---:|---|
+| Fig. 4.13 under RM: who misses, when? | τ2 misses at t = 7 ms | RTA: `R2 = 4 + ⌈R2/5⌉·2` converges to 8 ms > `D2` = 7 ms | 3429 τ2 misses in 60 s; measured τ2 max pulse 6.0099 ms | EV-W06-RM-001 |
+| Fig. 4.13 under EDF: misses in 60 s | 0 | `U = 2/5 + 4/7 ≈ 0.971 ≤ 1` | τ1=0, τ2=0 in 60 s | EV-W06-EDF-001 |
+| Control response, isolated baseline | ≈ 12 µs transfer estimate; no S3 node `C_i` yet | Week-4 hand-off plus NUCLEO `C`; platform/model caveat | 0.93830 ms in Task B standalone baseline | EV-W06-INV-BASELINE-001; not node `C_i` |
+| Control response with `k_sem` | Medium work can extend blocking | Medium preempts lock holder | 50.466 ms; low lock-held pulse 51.604 ms; medium pulse 23.444 ms | EV-W06-INV-SEMAPHORE-001 |
+| Control response with `k_mutex` | `C+B` envelope; PI lets low finish before medium | Priority inheritance | 27.001 ms; measured `B=28.148 ms` | EV-W06-INV-MUTEX-001 |
+| `calib` CPU / wall duration, before | ≈400 ms / ≈400 ms | 1000 × `k_busy_wait(400)` | ≈400 ms estimated CPU / 400.8 ms measured wall | EV-W06-ESTOP-CALIB-001 |
+| `calib` CPU / wall duration, after | ≈2.804 ms estimated CPU / <1 s wall | Week-5 trace: 2.804 µs × 1000; sleeping yields CPU | ≈2.804 ms indirect estimate / 499.4 ms measured wall | EV-W06-ESTOP-CALIB-001 |
+| E-stop sum and measurement, before | ≈10 ms control release + 1 ms PWM = 11 ms | Next control job updates valve | Max 10.080 ms across five trips; exceeds 5 ms | EV-W06-ESTOP-CALIB-001 |
+| E-stop sum and measurement, after | Sampling release/dispatch + remaining `C_sampling` to PWM; µs order | Valve low in detecting sampling job | 0.2561 µs in one trip; not a maximum bound | EV-W06-ESTOP-CALIB-001 |
+
+The observations match the qualitative predictions, but the isolated Task B
+widths are not the SoilSense node's `C_i`. The 3429 measured RM misses also
+exceed the ideal model's one miss per 35 ms hyperperiod; firmware GPIO,
+calibration-loop and scheduler/context-switch costs can make another τ2 job
+late by a few microseconds. Treat this as an explanation consistent with the
+measurement, not as a separately isolated cause. `calib` fits the one-second
+budget under the observed node task share: Week-5 sampling, control, flow,
+display and telemetry together use about 1.09%, leaving about 989 ms/s. Daniela's
+tasks must be included when supplied. The full S3 `C_i` table remains pending.
+
+### 3.8 Future-week evidence rule
 
 Each new measurement record must state:
 
@@ -517,15 +601,14 @@ implementations. They are **observed execution maxima**, not WCET bounds, and
 cannot be combined into one formal schedulability test without a consistent
 platform, load and blocking model.
 
-| Task | Available execution evidence | `C_i` for formal analysis | `T_i` | `D_i` | `B_i` / limitation |
-|---|---|---|---:|---:|---|
-| Sampling + safety check | NUCLEO cache-on `C_obs,max` 3 µs (EV-W02-BASELINE-002); C6 Week-3 threaded `C_obs,max` 2.7 µs (EV-W03-CI-008) | TBD for the chosen full-kernel configuration | 1 ms | 1 ms | NUCLEO superloop had no mutexes; full-kernel blocking remains to be analyzed. The measured period failed in some runs |
-| Control loop | NUCLEO `C_obs,max` 0.7 µs across 300 runs (EV-W02-TASKS-006) | TBD for the chosen full-kernel configuration | 10 ms | 10 ms | Blocking model TBD; C6 control period reached 10.003 ms during `calib` |
-| Command console | NUCLEO `status` path max 6.6010 ms across eight received bytes (EV-W02-TASKS-006); synchronous `calib` blocked the superloop for about 414 ms (EV-W02-BLOCK-005) | TBD; the `status` statistic is not a generic console WCET | Sporadic | TBD | Firm response deadline and worst-case interference model TBD |
-| Telemetry | NUCLEO `C_obs,max` 5.7770 ms across 30 runs (EV-W02-TASKS-006) | TBD for the chosen full-kernel configuration | 1 s | 1 s, from REQ-CTRL-04 | Period and width were observed; analytical bound TBD |
-| Flow batch | NUCLEO `C_obs,max` 44 µs across 30 batches (EV-W02-TASKS-006) | TBD if included in formal analysis | Every 100 flow pulses | TBD | Event-driven workload; no deadline allocated |
-| Display HMI | Not enabled in the recorded run | TBD | 500 ms when enabled | TBD | Optional task; execution and blocking unmeasured |
-
+| Task | Available execution evidence | `C_i` for S3 analysis | `T_i` | `D_i` | `B_i` / limitation |
+|---|---|---:|---:|---:|---|
+| Sampling + safety check | NUCLEO: 3 µs; C6: 2.7 µs (different platforms) | TBD — measure GPIO4 pulse on ESP32-S3 | 1 ms | 1 ms | S3 blocking not characterized |
+| Control loop | NUCLEO: 0.7 µs; isolated Week-6 demo: 0.93830 ms (not node firmware) | TBD — measure GPIO5 pulse on ESP32-S3 | 10 ms | 10 ms | Task B response is not node `C_i` |
+| Command console | NUCLEO `status`: 6.6010 ms; C6 `calib`: ≈414 ms | TBD — measure GPIO6 on ESP32-S3 | Sporadic | TBD | Calib wall duration is not CPU `C_i`; command arrival model TBD |
+| Telemetry | NUCLEO: 5.7770 ms | TBD — measure GPIO7 on ESP32-S3 | 1 s | 1 s | S3 value pending |
+| Flow batch | NUCLEO: 44 µs | TBD — measure GPIO8 on ESP32-S3 | Every 100 flow pulses | TBD | Event-driven; deadline not allocated |
+| Display HMI | Not measured; disabled in past run | TBD — measure GPIO9 on ESP32-S3 when enabled | 500 ms | TBD | Optional; S3 value pending |
 ### 4.2 Tests and results
 
 | Analysis | Applicability | Result | Evidence/tool | Verdict |
@@ -619,8 +702,11 @@ any deviation from the spec before assigning a verdict.
 
 | ID | Item | Owner | Due | Status |
 |---|---|---|---|---|
-| OI-001 | Confirm course-provided baseline board for weeks 1–2; student bring-up uses NUCLEO-G474RE | Team/instructor | Before week 2 | OPEN |
+| OI-001 | Confirm course-provided baseline board for weeks 1–2; student bring-up uses NUCLEO-G474RE | Team/instructor | Before week 2 | OPEN — overdue; weeks 1–2 were run on the NUCLEO-G474RE as a declared deviation from the course NUCLEO-L476RG |
 | OI-002 | Record team member names | Team | Week 1 | CLOSED — Juan Pablo Vargas Cordoba |
 | OI-003 | Record board model, serial, and nickname | Team | Week 1 | CLOSED — NUCLEO-G474RE and STLINK-V3 identifier recorded |
 | OI-004 | Define numeric jitter and firm/soft deadlines | Team/instructor | Before verification | PARTIAL — sampling deadline fixed at 1 ms; console firm deadline remains TBD |
 | OI-005 | Declare/install the editor used for the course | Team | Before week 1 | CLOSED — GNU nano 7.2 used |
+| OI-006 | Record the ESP32-S3 DevKitC serial/nickname used in Week 5 | Team | Week 6 | OPEN |
+| OI-007 | Confirm firmware commit and workload in EV-W05-JITTER-ON-004 and EV-W05-JITTER-OFF-005 | Team | Week 6 | PARTIAL — records written from the captures; commit and workload unconfirmed |
+| OI-008 | Fix the reference platform for §4 schedulability inputs and measure every `C_i` on it | Team | Week 6 | OPEN |

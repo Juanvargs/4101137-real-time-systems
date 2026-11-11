@@ -1,69 +1,97 @@
 #!/usr/bin/env python3
-"""Week 6 schedulability checks using the lab's measured parameters."""
+"""Run fixed-priority response-time and utilization analyses from JSON."""
 
-from math import ceil, sqrt
+import argparse
+import json
+from math import ceil
+from pathlib import Path
 
 
-def response_time(c_ms, b_ms=0.0, higher_priority=()):
-    """Fixed-priority RTA: R = C + B + sum(ceil(R/T_h) * C_h)."""
+def response_time(task, higher_priority):
+    """Return the RTA fixed point and iteration history in milliseconds."""
+    c_ms = task["c_ms"]
+    b_ms = task.get("blocking_ms", 0.0)
     r_ms = c_ms + b_ms
     history = [r_ms]
     for _ in range(1000):
         next_ms = c_ms + b_ms + sum(
-            ceil(r_ms / period_ms) * execution_ms
-            for execution_ms, period_ms in higher_priority
+            ceil(r_ms / hp["period_ms"]) * hp["c_ms"]
+            for hp in higher_priority
         )
         history.append(next_ms)
         if abs(next_ms - r_ms) < 1e-12:
             return next_ms, history
+        if next_ms > task["deadline_ms"]:
+            return next_ms, history
         r_ms = next_ms
-    raise RuntimeError("RTA did not converge")
+    raise RuntimeError(f"RTA did not converge for {task['name']}")
 
 
-def report_task(name, c_ms, deadline_ms, b_ms=0.0, higher_priority=()):
-    r_ms, history = response_time(c_ms, b_ms, higher_priority)
-    verdict = "PASS" if r_ms <= deadline_ms else "FAIL"
-    print(f"{name}: C={c_ms:.5f} ms, B={b_ms:.5f} ms, "
-          f"R={r_ms:.5f} ms, D={deadline_ms:.5f} ms -> {verdict}")
-    print("  iteration: " + " -> ".join(f"{value:g}" for value in history))
-    return r_ms
+def task_set_missing(spec):
+    missing = []
+    for task in spec.get("tasks", []):
+        for key in ("c_ms", "period_ms", "deadline_ms"):
+            if task.get(key) is None:
+                missing.append(f"{task['name']}.{key}")
+    return missing
+
+
+def analyze(spec):
+    print(f"\n{spec['name']}")
+    missing = task_set_missing(spec)
+    if missing:
+        print("  PENDING: fill measured/model parameters: " + ", ".join(missing))
+        return
+
+    tasks = spec["tasks"]  # high-to-low priority order for fixed-priority RTA
+    if spec.get("utilization_tests", True):
+        utilization = sum(task["c_ms"] / task["period_ms"] for task in tasks)
+        n = len(tasks)
+        ll_bound = n * (2 ** (1 / n) - 1) if n else 0.0
+        product = 1.0
+        for task in tasks:
+            product *= 1 + task["c_ms"] / task["period_ms"]
+        print(f"  U={utilization:.6f}")
+        print(f"  Liu-Layland n={n}: bound={ll_bound:.6f}; "
+              f"{'PASS' if utilization <= ll_bound else 'inconclusive'}")
+        print(f"  Hyperbolic product={product:.6f}; "
+              f"{'PASS' if product <= 2 else 'inconclusive'}")
+        if all(task["deadline_ms"] == task["period_ms"] for task in tasks):
+            print(f"  EDF implicit-deadline test: "
+                  f"{'PASS' if utilization <= 1 else 'FAIL'} (U <= 1)")
+
+    for index, task in enumerate(tasks):
+        r_ms, history = response_time(task, tasks[:index])
+        verdict = "PASS" if r_ms <= task["deadline_ms"] else "FAIL"
+        print(f"  {task['name']}: C={task['c_ms']:.6f} ms, "
+              f"B={task.get('blocking_ms', 0.0):.6f} ms, "
+              f"R={r_ms:.6f} ms, D={task['deadline_ms']:.6f} ms -> {verdict}")
+        print("    iteration: " + " -> ".join(f"{value:g}" for value in history))
+        if "observed_response_ms" in task:
+            observed = task["observed_response_ms"]
+            print(f"    observed R={observed:.6f} ms; "
+                  f"within calculated envelope: {observed <= r_ms}")
 
 
 def main():
-    print("Fig. 4.13, RM response-time analysis")
-    c1_ms, t1_ms = 2.0, 5.0
-    c2_ms, t2_ms = 4.0, 7.0
-    report_task("tau1", c1_ms, t1_ms)
-    report_task("tau2", c2_ms, t2_ms,
-                 higher_priority=((c1_ms, t1_ms),))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--input", type=Path,
+        default=Path(__file__).with_name("week06_rta_input.json"),
+        help="JSON file containing task sets (default: week06_rta_input.json)",
+    )
+    parser.add_argument("--set", dest="set_name", help="analyze one named task set")
+    args = parser.parse_args()
 
-    u1 = c1_ms / t1_ms
-    u2 = c2_ms / t2_ms
-    utilization = u1 + u2
-    ll_bound = 2 * (2 ** (1 / 2) - 1)
-    hyperbolic_product = (1 + u1) * (1 + u2)
-    print("\nUtilization checks for Fig. 4.13")
-    print(f"U={utilization:.6f}; Liu-Layland n=2 bound={ll_bound:.6f} "
-          f"({ 'PASS' if utilization <= ll_bound else 'inconclusive' })")
-    print(f"Hyperbolic product={hyperbolic_product:.6f} "
-          f"(bound <= 2; { 'PASS' if hyperbolic_product <= 2 else 'inconclusive' })")
-    print(f"EDF implicit-deadline test: U <= 1 is "
-          f"{ 'PASS' if utilization <= 1 else 'FAIL' }")
-
-    print("\nTask B, measured control C and lock-held B (ms)")
-    c_control_ms = 0.93830
-    r_baseline = report_task("baseline", c_control_ms, 10.0)
-    r_sem = report_task("binary semaphore (observed B)", c_control_ms,
-                        10.0, b_ms=51.604)
-    r_mutex = report_task("mutex PI", c_control_ms, 10.0,
-                          b_ms=28.148)
-    print("\nMeasured control responses: baseline=0.93830 ms, "
-          "semaphore=50.466 ms, mutex PI=27.001 ms")
-    print(f"Observed <= calculated envelope: baseline {0.93830 <= r_baseline}, "
-          f"semaphore {50.466 <= r_sem}, mutex PI {27.001 <= r_mutex}")
-    print("The semaphore B is this capture's wall-clock lock-held width, "
-          "including medium-thread interference; it is not a protocol-level "
-          "blocking guarantee.")
+    data = json.loads(args.input.read_text(encoding="utf-8"))
+    task_sets = data["task_sets"]
+    if args.set_name:
+        task_sets = [spec for spec in task_sets if spec["name"] == args.set_name]
+        if not task_sets:
+            parser.error(f"task set not found: {args.set_name}")
+    print(f"Input: {args.input}")
+    for spec in task_sets:
+        analyze(spec)
 
 
 if __name__ == "__main__":

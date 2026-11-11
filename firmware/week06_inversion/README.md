@@ -37,6 +37,12 @@ Each low critical section performs 30 ms of calibrated CPU work, medium performs
 25 ms, and control performs 1 ms. Since this is CPU work, preemption extends the
 wall-clock pulse in the semaphore case. Expected ordering:
 
+The calibration stores `iterations_per_us` as an integer, so the computed loop
+rate is truncated. In the recorded build this made the nominal 30 ms, 25 ms,
+and 1 ms workloads about 28.15 ms, 23.44 ms, and 0.938 ms respectively. The
+analyzer widths in the evidence are the measured values and should be treated as
+empirical for this build, not as exact requested CPU times.
+
 - `b`: only the short control response pulse.
 - `s`: control requests the held lock; medium runs while low is blocked from CPU;
   control's response is longest.

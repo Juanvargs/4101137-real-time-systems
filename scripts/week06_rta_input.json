@@ -1,0 +1,49 @@
+{
+  "task_sets": [
+    {
+      "name": "Fig. 4.13 — RM",
+      "tasks": [
+        {"name": "tau1", "c_ms": 2.0, "period_ms": 5.0, "deadline_ms": 5.0},
+        {"name": "tau2", "c_ms": 4.0, "period_ms": 7.0, "deadline_ms": 7.0}
+      ]
+    },
+    {
+      "name": "Task B — baseline",
+      "utilization_tests": false,
+      "tasks": [
+        {"name": "control", "c_ms": 0.93830, "period_ms": 10.0,
+         "deadline_ms": 10.0, "blocking_ms": 0.0,
+         "observed_response_ms": 0.93830}
+      ]
+    },
+    {
+      "name": "Task B — binary semaphore (observed envelope only)",
+      "utilization_tests": false,
+      "tasks": [
+        {"name": "control", "c_ms": 0.93830, "period_ms": 10.0,
+         "deadline_ms": 10.0, "blocking_ms": 51.604,
+         "observed_response_ms": 50.466}
+      ]
+    },
+    {
+      "name": "Task B — mutex with priority inheritance",
+      "utilization_tests": false,
+      "tasks": [
+        {"name": "control", "c_ms": 0.93830, "period_ms": 10.0,
+         "deadline_ms": 10.0, "blocking_ms": 28.148,
+         "observed_response_ms": 27.001}
+      ]
+    },
+    {
+      "name": "SoilSense ESP32-S3 node — fill after GPIO measurements",
+      "tasks": [
+        {"name": "sampling", "c_ms": null, "period_ms": 1.0, "deadline_ms": 1.0},
+        {"name": "control", "c_ms": null, "period_ms": 10.0, "deadline_ms": 10.0},
+        {"name": "flow batch", "c_ms": null, "period_ms": null, "deadline_ms": null},
+        {"name": "display", "c_ms": null, "period_ms": 500.0, "deadline_ms": null},
+        {"name": "telemetry", "c_ms": null, "period_ms": 1000.0, "deadline_ms": 1000.0},
+        {"name": "console", "c_ms": null, "period_ms": null, "deadline_ms": null}
+      ]
+    }
+  ]
+}

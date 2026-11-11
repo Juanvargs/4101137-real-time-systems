@@ -1,6 +1,11 @@
 # EV-W06-RTA-001 — Análisis de respuesta y utilización
 
-**Plataforma de las mediciones:** ESP32-S3 DevKitC · **Script:** [`scripts/week06_rta.py`](../../scripts/week06_rta.py) · **Entradas:** parámetros de Fig. 4.13 y mediciones EV-W06 de Task B.
+**Plataforma de las mediciones:** ESP32-S3 DevKitC · **Script:** [`scripts/week06_rta.py`](../../scripts/week06_rta.py) · **Entradas:** [`scripts/week06_rta_input.json`](../../scripts/week06_rta_input.json).
+
+Para repetir el análisis con otros parámetros, edita el JSON y ejecuta
+`python scripts/week06_rta.py --input ruta/al/conjunto.json`. Para imprimir solo
+un conjunto, agrega `--set "Fig. 4.13 — RM"`. La entrada SoilSense queda marcada
+como pendiente hasta medir `C_i`, períodos y deadlines en la S3.
 
 ## Fig. 4.13
 

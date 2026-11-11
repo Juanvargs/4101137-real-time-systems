@@ -30,15 +30,22 @@ Plataforma: ESP32-S3 DevKitC. Usar GPIO4/GPIO5 para los pulsos de Task A; GPIO21
 - [x] Medir `calib` antes del cambio: GPIO6/DIO3 pulso de 400.8 ms; CPU estimada ≈400 ms por 1000 × `k_busy_wait(400)`, más lecturas y bucle.
 - [x] Cambiar `k_busy_wait(400)` por `k_usleep(400)`; tick de sistema S3 observado/configurado en 100 µs.
 - [x] En sampling, al detectar sobrepresión, poner `duty_pct=0` antes de actualizar PWM.
-- [x] Repetir captura e-stop y medición CPU/duración de `calib`: post-arreglo ΔX=256.1 ns; `calib` pared=499.4 ms; consola ≈115.6 ms CPU por ejecución (runtime-cycle delta; incluye algo de comando/serial).
-- [x] Calcular ajuste temporal y comparar: `calib` pasa de ≈400 ms CPU (≈40 % de un segundo si se ejecuta una vez por segundo) a ≈115.6 ms (≈11.6 %); e-stop pasa de máximo 10.080 ms (incumple 5 ms) a 256.1 ns (cumple).
+- [x] Repetir captura e-stop y medición de duración de pared de `calib`: post-arreglo ΔX=256.1 ns; `calib` pared=499.4 ms.
+- [x] Corregir la estimación de CPU: se descarta el delta de `console_tid` de ≈115.6 ms porque los reportes `threads` por UART polling dominan el costo; método de la guía estima ≈2.804 ms de CPU (`EV-W06-ESTOP-CALIB-001.md`).
+- [x] Sumar presupuesto de un segundo: las tareas del nodo sobre la consola ocupan ≈1.09 % en EV-W05-CPU-001, dejando ≈989 ms/s observados; caben 400 ms pre-fix y ≈2.8 ms post-fix. No es WCET y falta sumar las tareas de Daniela.
+- [x] Incluir ambos análisis de suma e-stop en RET y evidencia: antes 10+1≈11 ms; después dispatch de sampling + `C_sampling` restante hasta PWM, microsegundos observados en un trip.
 
 ## Análisis y entrega
 
 - [x] Implementar el script RTA y alimentarlo con `C_control=0.93830 ms` y los anchos de bloqueo medidos; separar el `B` empírico del semáforo de la cota por mutex PI (`scripts/week06_rta.py`).
 - [x] Calcular utilización, Liu–Layland e hiperbólico para Fig. 4.13. Las tareas extra de Daniela siguen pendientes porque no se han entregado sus parámetros.
 - [x] Comparar RTA con los resultados medidos, incluyendo bloqueo (`EV-W06-RTA-001.md`).
-- [x] Completar ADR-002 (mutex y `B`) y ADR-005 (`calib` y e-stop) con números en `RET.md`.
-- [x] Añadir tablas, resultados y capturas de Task C a §3 y §4 del RET.
-- Problem Set de capítulos 2, 4, 7 y RTA: fuera del alcance de esta entrega por decisión del usuario.
-- [x] Revisar evidencias y subir el commit final.
+- [x] Completar ADR-002 con estado/datos compartidos y ADR-005 con números corregidos y ambas sumas e-stop.
+- [x] Añadir tabla predictivo/observado de Semana 6 y lectura en §3.7; registrar por separado qué valores de Task B no son `C_i` del nodo.
+- [ ] Medir en la S3 los `C_i` de sampling, control, telemetry, console, flow y display con el firmware de instrumentación del kernel; actualizar JSON, RTA, §3 y §4.
+- [ ] Anotar las tres capturas de Task B con la secuencia low toma lock → control espera → medium preempta (semaphore) y low hereda prioridad → control corre antes de medium (mutex).
+- [x] Explicar la diferencia entre 3429 misses observados y 1714 del modelo ideal en `EV-W06-RM-001.md`; el mecanismo se presenta como hipótesis consistente con overhead medido/no aislado.
+- [x] Hacer que `scripts/week06_rta.py` lea conjuntos modificables desde JSON y permita elegir un conjunto por argumento.
+- [x] Declarar el uso de Codex y atribuir las mediciones/capturas a las ejecuciones del usuario.
+- Problem Set de capítulos 2, 4, 7 y RTA: omitido por decisión explícita del usuario; el taller de Semana 7 lo solicita como prerrequisito.
+- [ ] Revisar, integrar y subir el commit de cierre una vez resueltas las tareas de documentación pendientes que dependan de capturas.
