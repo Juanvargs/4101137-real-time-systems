@@ -47,7 +47,7 @@ west build \
 
 ## Troubleshooting record
 
-The first student-run attempt used the shared default `build/` directory. CMake
+The first attempt used the shared default `build/` directory. CMake
 rejected it because its cache had been generated from
 `~/zephyrproject/zephyr/CMakeLists.txt`, while the requested application source was
 `samples/hello_world/CMakeLists.txt`. Since configuration failed, no `zephyr.exe`
@@ -59,7 +59,7 @@ CMake cache state from one application from being reused for another.
 
 ## Observed result
 
-The student-run build completed all 99 build steps successfully. Execution
+The build completed all 99 build steps successfully. Execution
 produced:
 
 ```text
