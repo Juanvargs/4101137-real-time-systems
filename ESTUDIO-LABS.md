@@ -114,10 +114,10 @@ para no presentar sus resultados como si fueran de otra placa.
 
 En esta semana se midió el firmware de arquitectura **superbucle** en la placa
 NUCLEO-G474RE. El temporizador generaba un tick cada 1 ms, pero el trabajo de
-muestreo y las demás tareas se atendían desde el bucle principal. El Analógico
+muestreo y las demás tareas se atendían desde el bucle principal. El Analog
 Discovery 2 (AD2) y WaveForms observaron los GPIO de instrumentación.
 
-La semana incluyó una línea base normal, una prueba con caché/accelerador Flash
+La semana incluyó una línea base normal, una prueba con caché/acelerador Flash
 desactivado, una prueba mientras se ejecutaba `calib`, y capturas de anchos de
 pulsos de varias rutas. En la línea base no se ejecutaba un comando de consola;
 en la prueba de bloqueo se envió `calib` por el puerto serial.
@@ -445,6 +445,22 @@ revisando es:
    el hilo de muestreo, durante `calib` y en reposo.
 5. `EV-W03-CI-008.png`: ancho del pulso de ejecución de `task_sampling()`.
 
+#### Imagen 1: el port funcionando — `EV-W03-PORT-001.png`
+
+Es una captura de la terminal, no del analizador. Muestra `miniterm` abierto a
+115200 baudios en `/dev/ttyACM0` (consola USB Serial/JTAG de la ESP32-C6) con
+el superbucle portado. Cada línea `t=... p_mv=... sp_mv=... duty=...` es la
+telemetría de 1 Hz: `t` avanza 1000 ms entre líneas, la presión ronda el
+setpoint de 1500 mV y el `duty` del PI está entre 43 y 46 %. En medio se envió
+`status`, que responde con el mismo estado y `backlog_peak=51`.
+
+Lo que demuestra es que el mismo código C compiló, se cargó y corre en otra
+placa solo cambiando el overlay de Devicetree: el control funciona y la consola
+responde. **No es una medición temporal**: no hay tiempos de GPIO. El
+`backlog=51` indica que en ese superbucle llegaron a acumularse 51 ticks
+pendientes, una señal de que el bucle ya se retrasaba, pero el retraso se mide
+en las capturas siguientes con el AD2.
+
 #### Imagen 2: línea base C6 — `EV-W03-BASELINE-002.png`
 
 Esta es una captura de 30 s del ESP32-C6 DevKitC compatible con el superbucle,
@@ -682,9 +698,46 @@ Para revisar las imágenes de Week 4 en orden:
 1. `EV-W04-KERNEL-IDLE-001.png`: períodos de muestreo/control con el kernel en
    reposo.
 2. `EV-W04-KERNEL-CALIB-002.png`: períodos con `calib` activo.
-3. `EV-W04-CONTEXT-003.png` a `EV-W04-CONTEXT-007.png`: cursores para medir el
-   traspaso del hilo de muestreo al de control.
-4. `EV-W04-STACK-004.png`: salida del analizador de pilas bajo carga.
+3. a 7. `EV-W04-CONTEXT-003.png` a `EV-W04-CONTEXT-007.png`: cursores para
+   medir el traspaso del hilo de muestreo al de control.
+8. `EV-W04-STACK-004.png`: salida del analizador de pilas bajo carga.
+
+#### Imagen 1: `EV-W04-KERNEL-IDLE-001.png` — kernel en reposo
+
+La captura registra 30 s a 1 MHz. DIO0 es el marcador de ejecución de
+`sampling_tid`; la tabla mide su período, es decir, el tiempo entre pulsos
+consecutivos. Se ven 29 999 períodos, con media de 1,0000 ms, mínimo de
+0,9940 ms y máximo de 1,0040 ms. Frente al objetivo de 1 ms, las desviaciones
+extremas son 6 μs por debajo y 4 μs por encima; por tanto, la fluctuación
+absoluta máxima observada es 6 μs.
+
+DIO1 es el marcador de control, pero esta captura toma una muestra cada 1 μs.
+Como los pulsos de control son mucho más cortos, el analizador puede perder
+flancos. Por eso la tabla muestra solo 2 468 períodos y valores de hasta
+40,003 ms; **no deben presentarse como el período real del control**. Para
+comparar el control se usa la captura con `calib`, tomada a 5 MHz, que sí
+resuelve sus pulsos y da un máximo de 10,003 ms. Esta captura de reposo sirve
+para el resultado de muestreo, no para concluir que el control tuvo un período
+medio de 12,152 ms.
+
+#### Imagen 2: `EV-W04-KERNEL-CALIB-002.png` — `calib` durante la captura
+
+Aquí el AD2 registra 6 s a 5 MHz mientras se ejecuta `calib` por la consola.
+La resolución es de 0,2 μs por muestra, así que esta captura sí permite
+resolver el marcador rápido de control. DIO0 (muestreo) tiene 5 999 períodos:
+promedio 1,0000 ms, mínimo 0,99380 ms y máximo 1,0056 ms. Respecto al objetivo
+de 1 ms, el peor desvío absoluto es 6,2 μs. DIO1 (control) tiene 599 períodos,
+promedio 10,000 ms, mínimo 9,9966 ms y máximo 10,003 ms; el máximo supera los
+10 ms nominales por 3 μs.
+
+La columna `Period` mide el tiempo entre pulsos consecutivos de ese marcador;
+no es el ancho de ejecución de la tarea. La captura muestra que el `calib` ya
+no bloquea muestreo y control durante cientos de milisegundos, como ocurría en
+el superbucle. Aun así, los dos máximos observados exceden ligeramente sus
+períodos objetivo: son una mejora grande, pero no demuestran cumplimiento
+estricto ni un WCET. El `control_sem` es parte de cómo se libera el control
+cada diez muestreos; el pulso DIO1 permite observar el ritmo resultante, no
+ver directamente la operación interna del semáforo.
 
 #### Imagen 3: `EV-W04-CONTEXT-003.png` — un traspaso muestreo → control
 
@@ -729,42 +782,27 @@ observaciones del intervalo entre el fin del marcador de muestreo y el inicio
 del marcador de control. Está entre el mínimo de 11,0 μs y el máximo de
 11,7 μs; no cambia esos extremos ni el propósito de la medición.
 
-#### Imagen 1: `EV-W04-KERNEL-IDLE-001.png` — kernel en reposo
+#### Imagen 7: `EV-W04-CONTEXT-007.png` — quinta muestra del traspaso
 
-La captura registra 30 s a 1 MHz. DIO0 es el marcador de ejecución de
-`sampling_tid`; la tabla mide su período, es decir, el tiempo entre pulsos
-consecutivos. Se ven 29 999 períodos, con media de 1,0000 ms, mínimo de
-0,9940 ms y máximo de 1,0040 ms. Frente al objetivo de 1 ms, las desviaciones
-extremas son 6 μs por debajo y 4 μs por encima; por tanto, la fluctuación
-absoluta máxima observada es 6 μs.
+Mismo método: X1 en la bajada de DIO0 (fin del muestreo) y X2 en la subida
+siguiente de DIO1 (inicio del control), con la vista a 5 μs/div. WaveForms
+muestra `ΔX = 11,33 μs`, la quinta y última muestra de la serie. Con ella se
+completan los cinco valores (11,1; 11,7; 11,0; 11,4 y 11,33 μs) que dan el
+mínimo de 11,0 μs, el máximo de 11,7 μs y el promedio de 11,306 μs. La tabla
+de Measurements muestra `Count 0` porque en esta vista no se pidió ninguna
+estadística: el dato sale de los cursores.
 
-DIO1 es el marcador de control, pero esta captura toma una muestra cada 1 μs.
-Como los pulsos de control son mucho más cortos, el analizador puede perder
-flancos. Por eso la tabla muestra solo 2 468 períodos y valores de hasta
-40,003 ms; **no deben presentarse como el período real del control**. Para
-comparar el control se usa la captura con `calib`, tomada a 5 MHz, que sí
-resuelve sus pulsos y da un máximo de 10,003 ms. Esta captura de reposo sirve
-para el resultado de muestreo, no para concluir que el control tuvo un período
-medio de 12,152 ms.
+#### Imagen 8: `EV-W04-STACK-004.png` — uso de pila bajo carga
 
-#### Imagen 2: `EV-W04-KERNEL-CALIB-002.png` — `calib` durante la captura
-
-Aquí el AD2 registra 6 s a 5 MHz mientras se ejecuta `calib` por la consola.
-La resolución es de 0,2 μs por muestra, así que esta captura sí permite
-resolver el marcador rápido de control. DIO0 (muestreo) tiene 5 999 períodos:
-promedio 1,0000 ms, mínimo 0,99380 ms y máximo 1,0056 ms. Respecto al objetivo
-de 1 ms, el peor desvío absoluto es 6,2 μs. DIO1 (control) tiene 599 períodos,
-promedio 10,000 ms, mínimo 9,9966 ms y máximo 10,003 ms; el máximo supera los
-10 ms nominales por 3 μs.
-
-La columna `Period` mide el tiempo entre pulsos consecutivos de ese marcador;
-no es el ancho de ejecución de la tarea. La captura muestra que el `calib` ya
-no bloquea muestreo y control durante cientos de milisegundos, como ocurría en
-el superbucle. Aun así, los dos máximos observados exceden ligeramente sus
-períodos objetivo: son una mejora grande, pero no demuestran cumplimiento
-estricto ni un WCET. El `control_sem` es parte de cómo se libera el control
-cada diez muestreos; el pulso DIO1 permite observar el ritmo resultante, no
-ver directamente la operación interna del semáforo.
+Es la salida de terminal del comando `threads` (`thread_analyzer_print`) en el
+C6, tomada después de aplicar pulsos de flujo de 100 Hz con el AD2 y de
+ejecutar `calib`. Para cada hilo muestra la pila usada sobre la asignada y el
+porcentaje. El dato clave es `idle`: 228 de 256 B (89 %), con solo **28 B
+libres**, el margen más estrecho. Entre los hilos de la aplicación, el más
+cargado es `console_tid` con 804 de 2048 B (39 %). `control_tid` usa
+236 de 1024 B (23 %). No hubo desbordamiento, pero es una medición bajo esta
+carga concreta; el display no estaba conectado, así que no incluye un redibujado
+completo por I2C.
 
 ### Preguntas de comprobación
 
@@ -888,6 +926,8 @@ una prueba en la misma placa o el mismo punto de medición. Para el período y
 jitter se cita AD2; para el orden de ejecución y la causa de las preempciones,
 CTF.
 
+### Guion oral sugerido
+
 > “En la Semana 5 activamos CTF para ver por dentro el orden de interrupciones
 > y tareas, medimos el reparto de CPU y comparamos el muestreo con el trazado
 > activado y desactivado. La traza confirmó que el muestreo de prioridad alta
@@ -952,15 +992,6 @@ control ni lo pone a correr mientras sigue ejecutándose el hilo de muestreo
 de mayor prioridad. Las operaciones GPIO de las filas siguientes marcan el
 inicio del código instrumentado de control.
 
-#### Imágenes 5–6: versiones anotadas de las trazas
-
-`EV-W05-PREEMPT-002-annotated.png` y
-`EV-W05-CONTROL-003-annotated.png` repiten las capturas anteriores, con
-recuadros y flechas que destacan la preempción y la entrega del semáforo. No
-son mediciones nuevas ni cambian los timestamps: ayudan a ubicar visualmente
-los eventos ya explicados. En la captura anotada del control, `pins=32` es la
-máscara del GPIO5 usado para marcar la entrada a la ruta de control.
-
 #### Imagen 3: `EV-W05-JITTER-ON-004.png` — muestreo con CTF activado
 
 El canal DIO0 está conectado al marcador `instr_samp` del ESP32-S3. La captura
@@ -990,6 +1021,24 @@ pendiente confirmar el identificador físico de la placa, el commit exacto y
 la carga idéntica entre capturas; por eso el RET lo presenta como costo
 observado/caracterizado, no como prueba causal definitiva ni límite.
 
+#### Imágenes 5–6: versiones anotadas de las trazas
+
+`EV-W05-PREEMPT-002-annotated.png` y
+`EV-W05-CONTROL-003-annotated.png` repiten las capturas anteriores, con
+recuadros y flechas que destacan la preempción y la entrega del semáforo. No
+son mediciones nuevas ni cambian los timestamps: ayudan a ubicar visualmente
+los eventos ya explicados. En la captura anotada del control, `pins=32` es la
+máscara del GPIO5 usado para marcar la entrada a la ruta de control.
+
+### Preguntas de comprobación
+
+1. ¿Por qué el intervalo CTF de 4,837 μs y el traspaso GPIO de 11,7 μs de la
+   Semana 4 no miden lo mismo?
+2. ¿Qué instrumento usamos para dar el número del jitter y cuál para explicar
+   el orden de ejecución? ¿Por qué?
+3. ¿Por qué la traza de `calib` solo conserva unos 75 ms si el comando dura
+   unos 400 ms?
+
 ## Semana 6 — Planificación, análisis temporal, inversión de prioridad y seguridad
 
 ### Propósito
@@ -1016,9 +1065,10 @@ nodo SoilSense: no son un único conjunto de tareas ni una única prueba.
   que termina. Puede ser mayor que `C_i` por preempción y bloqueo.
 - **Utilización `U`:** fracción ideal de CPU que requiere un conjunto:
   `U = Σ(C_i/T_i)`. Si `U>1`, la carga no cabe en un solo procesador. Si
-  `U≤1`, eso por sí solo no prueba que RM sea planificable; para EDF sí da un
-  criterio suficiente bajo las condiciones del modelo de tareas periódicas
-  independientes y deadlines implícitos.
+  `U≤1`, eso por sí solo no prueba que RM sea planificable. Para EDF, con
+  tareas periódicas independientes y deadlines implícitos (`D=T`), `U≤1` es
+  condición **necesaria y suficiente**: si se cumple, EDF es planificable, y si
+  no se cumple, ningún algoritmo lo es.
 - **RM (Rate Monotonic):** prioridad fija; cuanto menor es el período, mayor
   prioridad. En el ejemplo `τ1` (5 ms) tiene prioridad sobre `τ2` (7 ms).
 - **EDF (Earliest Deadline First):** prioridad dinámica; corre primero el
@@ -1092,8 +1142,9 @@ estas pruebas suficientes no pasen **no demuestra por sí mismo** que RM falle;
 RTA y la ejecución son la evidencia del fallo de `τ2`.
 
 **Con EDF**, la tarea lista con deadline más próximo recibe la CPU. Para tareas
-independientes con `D=T`, una utilización `U≤1` es suficiente en el modelo
-ideal. La simulación de 60 s informó cero misses para ambas tareas. La captura
+independientes con `D=T`, una utilización `U≤1` es necesaria y suficiente en
+el modelo ideal. La ejecución real de 60 s en la ESP32-S3 informó cero misses
+para ambas tareas. La captura
 de WaveForms muestra pulsos cercanos a `C1=2 ms` y `C2=4 ms`; el contador
 serial de 60 s es el que respalda el resultado de cero incumplimientos.
 
@@ -1133,7 +1184,11 @@ estimación indirecta de CPU fue 2,804 μs × 1000 = 2,804 ms, mientras que el
 tiempo de pared fue 499,4 ms. El tiempo de pared es mayor por redondeo al tick
 y planificación; no contradice que la CPU ocupada haya bajado mucho. La cifra
 2,804 ms es una estimación basada en la traza Week 5, no una lectura directa de
-un contador ni WCET.
+un contador ni WCET. Además es una **cota baja**: los 2,804 μs por ronda cubren
+la lectura y el bucle entre esperas, pero no el costo de dormir y despertar el
+hilo en cada `k_usleep` (llamada al kernel, programar el timeout y dos cambios
+de contexto). La CPU real después del arreglo es algo mayor que 2,804 ms,
+aunque sigue muy por debajo de los ≈400 ms de antes.
 
 ### D. E-stop antes y después
 
@@ -1176,10 +1231,16 @@ modelo de llegada/deadline de consola y flow y validación del display. Tampoco
 se incluyó bloqueo ni jitter de liberación. Por tanto, no presentar el resultado
 del subconjunto como certificación del sistema SoilSense completo.
 
+El display es la omisión que más pesa. Con su máximo observado de 24,641 ms
+cada 500 ms, solo él aportaría `24,641/500 ≈ 0,049` (≈4,9 %) a la utilización:
+más de diez veces el 0,43 % del subconjunto calculado. Si se valida el OLED,
+el `U` del nodo pasaría a rondar el 5,4 %. Sigue siendo bajo, pero cambia el
+orden de magnitud y es la tarea que más tiempo de CPU ocuparía.
+
 ### Conclusión y exposición sugerida
 
 La Semana 6 mostró que la política de planificación importa (RM incumple en
-Fig. 4.13 y EDF no en la simulación/modelo indicado), que un semáforo usado como
+Fig. 4.13 y EDF no en la ejecución de 60 s en la S3), que un semáforo usado como
 lock puede causar inversión de prioridad y que un mutex con herencia reduce esa
 inversión, aunque una sección crítica demasiado larga sigue rompiendo el plazo.
 También se reemplazó una espera ocupada de `calib` por esperas que ceden CPU y
@@ -1245,7 +1306,8 @@ midió.
 - **`calib` después:** 1000 `k_usleep(400)` ceden CPU. La duración de pared fue
   499,4 ms; la estimación indirecta de CPU fue 2,804 ms a partir de la traza
   Week 5. El tiempo de pared puede crecer por el tick/planificación aunque el
-  uso de CPU caiga. La estimación de CPU no es directa ni WCET.
+  uso de CPU caiga. La estimación de CPU no es directa ni WCET, y es una cota
+  baja: no incluye el costo de dormir y despertar el hilo en cada `k_usleep`.
 - **E-stop antes:** el camino podía esperar al control (hasta unos 10 ms) y al
   paso PWM (hasta 1 ms). Se observaron 10,080 ms de máximo en cinco pruebas,
   por encima del requisito de 5 ms.
@@ -1415,7 +1477,10 @@ Los ≈2,804 ms de **CPU** no se leen en esta captura. Son una estimación
 indirecta: la traza CTF de la semana 5 mostró unos 2,804 µs entre una espera y
 la siguiente; multiplicados por las 1000 rondas dan aproximadamente 2,804 ms.
 La estimación depende de que ese intervalo represente el trabajo de CPU entre
-esperas; no es una lectura directa de un contador de ciclos ni un WCET.
+esperas; no es una lectura directa de un contador de ciclos ni un WCET. Con
+`k_usleep` cada ronda suma, además, el costo de suspender y reanudar el hilo,
+que la traza de la Semana 5 (hecha con `k_busy_wait`) no contiene; por eso
+2,804 ms es una cota baja de la CPU real.
 
 Así se resuelve la aparente paradoja: **después, `calib` tarda unos 499,4 ms
 de pared, pero la estimación de CPU baja de unos 400 ms a unos 2,804 ms**. El
@@ -1510,6 +1575,16 @@ telemetría y su salida `printk` por UART polling. Tres observaciones sirven
 como caracterización inicial, pero son pocas para establecer una distribución
 estable o una cota máxima.
 
+**Por qué es tan distinto de la NUCLEO (5,777 ms):** en la Semana 2 la misma
+ruta de telemetría duró casi 90 veces más. Una explicación probable, **no
+verificada**, es que la UART de la ESP32-S3 tiene un FIFO de transmisión por
+hardware (128 B) que acepta la línea CSV completa de una vez; el `printk`
+termina al llenar el FIFO y los caracteres salen después por el cable. En la
+NUCLEO, con UART por *polling*, el código espera a que salga cada carácter a
+115200 baudios (≈87 μs por carácter), así que una línea de unos 60 caracteres
+ya cuesta ≈5 ms. Para confirmarlo habría que medir el pin TX de la UART junto
+con el marcador DIO3. Presentarlo como hipótesis.
+
 #### Consola `status` S3 — `EV-W06-CI-S3-DIO2-events.csv`
 
 Durante una captura de 3 s se envió un comando `status`. DIO2/GPIO6 registró
@@ -1546,7 +1621,18 @@ formados con 300 flancos de entrada, midieron hasta 2,5 μs cada uno. El display
 generó cinco pulsos de hasta 24,641 ms, pero como el OLED no mostró imagen, no
 aceptamos ese valor como ejecución funcional validada.”
 
-### Síntesis general de los laboratorios
+### Preguntas de comprobación
+
+1. Si en la Fig. 4.13 `U=0,971≤1`, ¿por qué RM falla y EDF no? ¿Qué dice cada
+   prueba (Liu–Layland, hiperbólica, RTA) y cuál decide?
+2. ¿Por qué el mutex con herencia de prioridad redujo la respuesta de control
+   de 50,466 ms a 27,001 ms, pero aun así no cumple los 10 ms?
+3. Después del arreglo, `calib` tarda más en tiempo de pared (499,4 ms frente a
+   400,8 ms). ¿Por qué eso es una mejora?
+4. ¿Qué hace falta para afirmar que el e-stop cumple 5 ms, además del único
+   ensayo de 0,2561 μs?
+
+## Síntesis general de los laboratorios
 
 | Semana | Qué se hizo | Qué se aprendió / resultado principal |
 |---|---|---|
